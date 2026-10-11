@@ -10,6 +10,7 @@
 #include "xwa_runtime/runtime/port.h"
 #include "xwa_runtime/runtime/presentation.h"
 #include "xwa_runtime/timing/modern_flight_timing.h"
+#include "xwa_vr/xwa_vr.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -301,6 +302,8 @@ int main(int argc, char** argv) {
 	config.clear_color_rgba[2] = 0.0f;
 	config.clear_color_rgba[3] = 1.0f;
 
+	/* Quest: present through OpenXR instead of the Android window. */
+	XwaVr_Install();
 	if (!Aeron_Init(&config)) {
 		return 1;
 	}

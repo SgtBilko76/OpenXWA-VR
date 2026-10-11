@@ -15,52 +15,62 @@ input:
     roll_enabled: true
     rumble_enabled: true
     rumble_strength: 6
+    # Quest Touch controllers appear as one virtual gamepad (src/xwa_vr):
+    #   right stick = rightx/righty, left stick = leftx/lefty, where lefty is
+    #   a throttle lever that stays where it is left; triggers = trigger axes;
+    #   A/B/X/Y = south/east/west/north; right grip = rightshoulder;
+    #   stick clicks = leftstick/rightstick; menu button = start.
+    #   Holding the LEFT grip turns Y/B/A/X into D-pad up/right/down/left and
+    #   the right stick click into back, the left stick click into guide and
+    #   the left trigger into leftshoulder.
+    # Every binding below is remappable in Options > Controller.
     gamepad:
       axes:
-        yaw: { source: 'leftx', invert: false, deadzone: 0.08 }
-        pitch: { source: 'lefty', invert: true, deadzone: 0.08 }
-        throttle: { source: 'righttrigger', invert: false, deadzone: 0.0 }
-        roll: { source: 'rightx', invert: false, deadzone: 0.08 }
+        yaw: { source: 'rightx', invert: false, deadzone: 0.08 }
+        pitch: { source: 'righty', invert: false, deadzone: 0.08 }
+        throttle: { source: 'lefty', invert: false, deadzone: 0.0 }
+        roll: { source: 'leftx', invert: false, deadzone: 0.15 }
       buttons:
-        '1': 'south'
-        '2': 'east'
-        '3': 'west'
-        '4': 'north'
-        '5': 'leftshoulder'
-        '6': 'rightshoulder'
-        '7': 'back'
-        '8': 'start'
-        '9': 'none'
-        '10': 'none'
-        '11': 'none'
-        '12': 'none'
-        '13': 'none'
+        '1': { axis: 'righttrigger', direction: 'positive', threshold: 0.5 }
+        '2': 'rightshoulder'
+        '3': 'south'
+        '4': 'east'
+        '5': 'west'
+        '6': 'north'
+        '7': { axis: 'lefttrigger', direction: 'positive', threshold: 0.5 }
+        '8': 'leftstick'
+        '9': 'rightstick'
+        '10': 'start'
+        '11': 'back'
+        '12': 'guide'
+        '13': 'leftshoulder'
         '14': 'none'
         '15': 'none'
         '16': 'none'
       pov: 'dpad'
       # Button slots 1-16, then D-pad up, right, down, and left.
+      # Codes are the action codes from the game's JOYSTICK.TXT.
       actions:
-        - 156
-        - 157
-        - 114
-        - 108
-        - 101
-        - 105
-        - 91
-        - 8
-        - 13
-        - 93
+        - 156 # right trigger: fire weapon
+        - 155 # right grip: pick target in sight
+        - 116 # A: next target
+        - 119 # B: cycle weapon settings
+        - 101 # X: cycle fighters targeting you
+        - 114 # Y: target nearest fighter
+        - 32  # left trigger: confirm (leave hangar, hyperspace)
+        - 13  # left stick click: match targeted craft's speed
+        - 120 # right stick click: cycle firing settings (link fire)
+        - 27  # menu: options screen
+        - 111 # left grip + right stick click: nearest objective craft
+        - 104 # left grip + left stick click: hyperspace (H)
+        - 80  # left grip + left trigger: pick up targeted craft (Shift-P)
         - 0
         - 0
         - 0
-        - 0
-        - 0
-        - 0
-        - 186
-        - 184
-        - 180
-        - 182
+        - 44  # left grip + Y: cycle target components
+        - 204 # left grip + B: shield recharge rate
+        - 203 # left grip + A: laser recharge rate
+        - 121 # left grip + X: previous target
     joystick:
       axes:
         yaw: { source: 0, invert: false, deadzone: 0.08 }

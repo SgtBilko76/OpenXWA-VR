@@ -4,6 +4,7 @@
 
 #include "aeron/aeron.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,7 +13,37 @@ typedef struct SkyStarsVsUniform {
 	float view[4];
 	float geom[4];
 	float tone[4];
+	uint32_t cycle_off[4];
+	uint32_t cycle_len[4];
+	uint32_t pal_packed[52];
 } SkyStarsVsUniform;
+
+/* Classic twinkle tables (FlightStarfield_Render). Uploaded through the
+ * cbuffer: Adreno drivers mis-read shader-side constant arrays. */
+static const uint32_t g_star_cycle_off[4] = { 0, 39, 103, 148 };
+static const uint32_t g_star_cycle_len[4] = { 39, 64, 45, 57 };
+static const uint8_t g_star_pal[205] = {
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+	20, 21, 22, 23, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+	0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 10, 12, 14, 16, 17,
+	18, 19, 20, 20, 21, 21, 22, 22, 22, 23, 23, 23, 23, 22, 22, 22, 21, 21, 20, 20,
+	19, 18, 17, 16, 14, 12, 10, 8, 7, 6, 5, 4, 4, 3, 3, 2, 2, 1, 1, 1,
+	0, 0, 0, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 23, 22, 20, 18,
+	16, 14, 12, 10, 8, 6, 4, 2, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 2, 1,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+	12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 23, 23, 23, 23, 20, 22, 18, 21,
+	18, 20, 19, 16, 18, 16, 17, 16, 15, 13, 14, 12, 12, 11, 10, 8, 5, 2, 0, 0,
+	0, 0, 0, 0, 0,
+};
+
+static void sky_stars_fill_tables(SkyStarsVsUniform* uniform) {
+	memcpy(uniform->cycle_off, g_star_cycle_off, sizeof g_star_cycle_off);
+	memcpy(uniform->cycle_len, g_star_cycle_len, sizeof g_star_cycle_len);
+	memset(uniform->pal_packed, 0, sizeof uniform->pal_packed);
+	for (uint32_t i = 0; i < sizeof g_star_pal; ++i) {
+		uniform->pal_packed[i >> 2] |= (uint32_t)g_star_pal[i] << ((i & 3u) * 8u);
+	}
+}
 
 struct XwaRemasterSkyStars {
 	AeronShader* vertex_shader;
@@ -150,6 +181,8 @@ int XwaRemasterSkyStars_Prepare(XwaRemasterSkyStars* stars, const AeronScene3D* 
 	stars->fragment_uniform[1] = params->pixel_pitch_px * pixel_scale;
 	stars->fragment_uniform[2] = params->feather_px * pixel_scale;
 	stars->fragment_uniform[3] = 0.0f;
+
+	sky_stars_fill_tables(&stars->vertex_uniform);
 
 	const uint32_t grid_n = (uint32_t)params->grid_n;
 	stars->vertex_count = 36u * grid_n * grid_n;

@@ -244,6 +244,15 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
  * between direct and texture-layer composition. */
 AeronTexture* XwaRemasterFlight_ResolvePresentation(AeronCommandBuffer* cmd, int direct_present);
 
+/* VR stereo (vr_stereo.h): one head-tracked eye without HUD, and the HUD
+ * alone over a transparent background. */
+struct XwaVrStereoEye;
+AeronTexture* XwaRemasterFlight_RenderEye(AeronCommandBuffer* cmd, const XwaSnapshot* snap,
+										  XwaRemasterAssets* assets, const struct XwaVrStereoEye* eye,
+										  int eye_index);
+AeronTexture* XwaRemasterFlight_RenderHudOverlay(AeronCommandBuffer* cmd, const XwaSnapshot* snap,
+												 XwaRemasterAssets* assets, int target_w, int target_h);
+
 /* Queues the prepared direct frame into Aeron's swapchain pass. */
 int XwaRemasterFlight_SubmitDirectPresentation(void);
 

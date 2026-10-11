@@ -315,10 +315,17 @@ set(XWA_APP_SOURCES
     src/xwa_app/main.c
     src/xwa_app/host_config.c
     src/xwa_app/setup.c
+    src/xwa_vr/xwa_vr.c
 )
 
-add_executable(xwa ${XWA_APP_SOURCES})
-set_target_properties(xwa PROPERTIES OUTPUT_NAME "OpenXWA")
+if(ANDROID)
+    # SDLActivity loads the game as libmain.so and calls SDL_main().
+    add_library(xwa SHARED ${XWA_APP_SOURCES})
+    set_target_properties(xwa PROPERTIES OUTPUT_NAME "main")
+else()
+    add_executable(xwa ${XWA_APP_SOURCES})
+    set_target_properties(xwa PROPERTIES OUTPUT_NAME "OpenXWA")
+endif()
 
 target_link_libraries(xwa
     PRIVATE
@@ -326,7 +333,9 @@ target_link_libraries(xwa
         xwa_remaster
 )
 target_include_directories(xwa PRIVATE
-	${CMAKE_CURRENT_SOURCE_DIR}/src/xwa_app)
+	${CMAKE_CURRENT_SOURCE_DIR}/src/xwa_app
+	${CMAKE_CURRENT_SOURCE_DIR}/src
+	${CMAKE_CURRENT_SOURCE_DIR}/third_party/openxr/include)
 
 set(XWA_AERON_SCENE3D_DEFAULTS
     "${CMAKE_CURRENT_SOURCE_DIR}/aeron/config/scene3d_defaults.yaml")

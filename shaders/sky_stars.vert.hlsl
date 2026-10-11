@@ -27,24 +27,22 @@ cbuffer SkyStarsVS : register(b0, space1)
     float4             geom;
     /* x = exposure × brightness, y = quad margin px, z/w reserved */
     float4             tone;
+    /* Twinkle cycles 0..3: start offset and length into the palette ramp. */
+    uint4              cycle_off;
+    uint4              cycle_len;
+    /* 208 palette bytes, four per uint, little-endian. */
+    uint4              pal_packed[13];
 };
 
-static const int STAR_CYCLE_OFF[4] = { 0, 39, 103, 148 };
-static const int STAR_CYCLE_LEN[4] = { 39, 64, 45, 57 };
-static const int STAR_PAL[205] = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-    20, 21, 22, 23, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-    0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 10, 12, 14, 16, 17,
-    18, 19, 20, 20, 21, 21, 22, 22, 22, 23, 23, 23, 23, 22, 22, 22, 21, 21,
-    20, 20, 19, 18, 17, 16, 14, 12, 10, 8, 7, 6, 5, 4, 4, 3, 3, 2, 2, 1, 1, 1,
-    0, 0, 0,
-    0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 23, 22, 20, 18, 16,
-    14, 12, 10, 8, 6, 4, 2, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 2, 1, 0, 0, 0, 0, 0,
-    0, 0, 0,
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-    19, 20, 21, 22, 23, 23, 23, 23, 23, 20, 22, 18, 21, 18, 20, 19, 16, 18,
-    16, 17, 16, 15, 13, 14, 12, 12, 11, 10, 8, 5, 2, 0, 0, 0, 0, 0, 0, 0
-};
+/* The twinkle tables (cycle offsets/lengths and the 205-entry palette ramp)
+ * arrive packed in the cbuffer above, filled by sky_stars.c. They used to be
+ * `static const` arrays, but Adreno (Quest) drivers read those SPIR-V Private
+ * initialisers as zero, which winked every star out. */
+uint star_pal(uint i)
+{
+    uint word = pal_packed[i >> 4u][(i >> 2u) & 3u];
+    return (word >> ((i & 3u) * 8u)) & 0xffu;
+}
 
 uint star_hash(uint x)
 {
@@ -128,12 +126,12 @@ VSOut main(uint vid : SV_VertexID)
     h = star_hash(h);
     uint attrib = h;
 
-    int cnt = STAR_CYCLE_LEN[ci];
+    int cnt = (int)cycle_len[ci];
     int phase = (int)(attrib % (uint)cnt);
     int jitter = (int)((attrib >> 13) & 7u);
     int step = (int)(geom.z / 60.0f);
     int idx = (step + phase) % cnt;
-    int n = STAR_PAL[STAR_CYCLE_OFF[ci] + idx];
+    int n = (int)star_pal(cycle_off[ci] + (uint)idx);
     if (n <= 0)
     {
         return o; /* winked out this frame */

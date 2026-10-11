@@ -15,8 +15,10 @@
  */
 
 #include "xwa_remaster/xwa_remaster.h"
+#include "xwa_remaster/vr_stereo.h"
 
 #include "aeron/aeron.h"
+#include "aeron/external_present.h"
 #include "aeron/debug.h"
 #include "aeron/scene/blend_ramp.h"
 #include "xwa_remaster/assets.h"
@@ -86,6 +88,27 @@ static struct {
 	int hyperspace_preview_last;
 	AeronSampleCount msaa_samples;
 } g;
+
+/* VR stereo frame published by the host for the next XwaRemaster_Frame. */
+static XwaVrStereoFrame g_vr_frame;
+static int              g_vr_frame_valid;
+static int              g_vr_stereo_rendered;
+
+void XwaRemasterVr_SetStereoFrame(const XwaVrStereoFrame* frame) {
+	g_vr_frame_valid = frame != NULL;
+	if (frame) {
+		g_vr_frame = *frame;
+	}
+}
+
+int XwaRemasterVr_StereoRendered(void) { return g_vr_stereo_rendered; }
+
+static int XwaRemaster_VrStereoWanted(const XwaSnapshot* snap) {
+	return g_vr_frame_valid && snap && snap->scene_kind == XWA_SCENE_FLIGHT && snap->flight_camera_valid &&
+		   !snap->flight_camera.map_mode && !snap->flight_camera.hyperspace_phase &&
+		   !XwaRemasterFlight_HyperspaceTunnelPreviewEnabled() && g_vr_frame.eyes[0].target &&
+		   g_vr_frame.eyes[1].target;
+}
 
 static int XwaRemaster_SnapshotHasPresent(const XwaSnapshot* snap) {
 	for (uint32_t i = 0; i < snap->surface_event_count; i++) {
@@ -467,7 +490,7 @@ static int XwaRemaster_CanSuppressClassicFlight(void) {
 }
 
 static int XwaRemaster_CanPresentFlightDirect(const XwaSnapshot* snap) {
-	return snap && snap->scene_kind == XWA_SCENE_FLIGHT && snap->flight_camera_valid &&
+	return snap && snap->scene_kind == XWA_SCENE_FLIGHT && snap->flight_camera_valid && !g_vr_frame_valid &&
 		   g.mode == RM_VIEW_HD && !g.pending_mode_valid && g.ramp.alpha >= 1.0f &&
 		   g.classic_suppressed_this_frame &&
 		   XwaRemasterFlight_CanDirectPresent(g.render_pixel_width, g.render_pixel_height);
@@ -549,8 +572,14 @@ void XwaRemaster_Frame(int32_t delta_us) {
 	}
 
 	const XwaSnapshot* snap = XwaSnapshot_Current();
+	g_vr_stereo_rendered = 0;
 	if (!snap) {
 		return;
+	}
+	const int vr_stereo = XwaRemaster_VrStereoWanted(snap) && g.mode == RM_VIEW_HD;
+	if (vr_stereo) {
+		/* Head tracking needs a fresh pair of eyes every host frame. */
+		g.force_scene_render = 1;
 	}
 	const int hyperspace_preview = XwaRemasterFlight_HyperspaceTunnelPreviewEnabled();
 	const int hyperspace_preview_visible = hyperspace_preview && snap->scene_kind == XWA_SCENE_FLIGHT &&
@@ -745,6 +774,26 @@ void XwaRemaster_Frame(int32_t delta_us) {
 				}
 				case XWA_SCENE_FLIGHT:
 					render_output_required = snap->flight_camera_valid;
+					if (vr_stereo) {
+						int eyes_ok = 1;
+						Aeron_GpuDebugPush(cmd, "OpenXWA VR stereo flight");
+						for (int eye = 0; eye < 2 && eyes_ok; ++eye) {
+							const XwaVrStereoEye* view = &g_vr_frame.eyes[eye];
+							AeronTexture* eye_tex = XwaRemasterFlight_RenderEye(cmd, snap, g.assets, view, eye);
+							eyes_ok = eye_tex && Aeron_BlitTextureToExternal(cmd, eye_tex, view->target,
+																			 view->target_width,
+																			 view->target_height);
+						}
+						next_scene_tex = eyes_ok ? XwaRemasterFlight_RenderHudOverlay(
+													   cmd, snap, g.assets, g.render_pixel_width,
+													   g.render_pixel_height)
+												 : NULL;
+						next_scene_is_direct = 0;
+						next_scene_is_tonemapped = next_scene_tex != NULL;
+						g_vr_stereo_rendered = next_scene_tex != NULL;
+						Aeron_GpuDebugPop(cmd);
+						break;
+					}
 					Aeron_GpuDebugPush(cmd, "OpenXWA flight renderer");
 					next_scene_tex = snap->flight_camera_valid
 										 ? XwaRemasterFlight_Render(cmd, snap, g.assets, g.render_pixel_width,

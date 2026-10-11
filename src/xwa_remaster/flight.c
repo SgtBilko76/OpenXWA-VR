@@ -21,6 +21,7 @@
 #include "xwa_remaster/ship.h"
 #include "xwa_remaster/sky_stars.h"
 #include "xwa_remaster/xwa_remaster.h"
+#include "xwa_remaster/vr_stereo.h"
 #include "xwa_runtime/runtime/presentation.h"
 #include "xwa_runtime/timing/host_clock.h"
 
@@ -278,6 +279,15 @@ static struct {
 	int map_present;
 	int suppress_hud;
 } s;
+
+/* VR stereo: the eye currently being rendered (NULL for the flat path), and
+ * the HUD-only overlay target with the frustum it was drawn for. */
+static const XwaVrStereoEye* fl_eye;
+static int                   fl_eye_index;
+static AeronRenderTarget*    fl_vr_hud_rt;
+static int                   fl_vr_hud_w, fl_vr_hud_h;
+static float                 fl_vr_hud_tan[4];
+static int                   fl_vr_hud_tan_valid;
 
 static void fl_draw_before_opaque(AeronCommandBuffer* command_buffer, AeronRenderPass* render_pass, int rt_w,
 								  int rt_h, void* user) {
@@ -1542,6 +1552,55 @@ static int fl_build_view_at_origin(const XwaFlightCamera* cam, const int32_t ori
 	out->classic_pixel_scale = (float)target_h / source_h;
 	AeronScene_ComputeViewProj(scene_camera, out->view_proj);
 	return 1;
+}
+
+/* Replaces the scene camera by one VR eye: the head pose (relative to the
+ * seat) is applied on top of the game ("body") camera, and the projection
+ * becomes the eye's asymmetric frustum. Game eye axes are x right, y down,
+ * z forward; OpenXR axes are x right, y up, -z forward (C = diag(1,-1,-1)). */
+static void fl_apply_vr_eye(AeronSceneCamera* camera, const XwaVrStereoEye* eye) {
+	float body[9];
+	float head[9];
+	float rel[9];
+	float rows[9];
+	const float q[4] = { eye->orientation[3], eye->orientation[0], eye->orientation[1], eye->orientation[2] };
+
+	fl_quat_to_mat3(camera->ori, body); /* world -> body eye, rows = body axes */
+	fl_quat_to_mat3(q, head);           /* head-local -> LOCAL, OpenXR axes */
+	/* rel = C * head * C maps eye-local game axes to body game axes. */
+	for (int r = 0; r < 3; ++r) {
+		for (int c = 0; c < 3; ++c) {
+			const float sign = (r == 0 ? 1.0f : -1.0f) * (c == 0 ? 1.0f : -1.0f);
+			rel[r * 3 + c] = head[r * 3 + c] * sign;
+		}
+	}
+	/* World -> eye = rel^T * body. */
+	for (int r = 0; r < 3; ++r) {
+		for (int c = 0; c < 3; ++c) {
+			rows[r * 3 + c] =
+				rel[0 * 3 + r] * body[0 * 3 + c] + rel[1 * 3 + r] * body[1 * 3 + c] + rel[2 * 3 + r] * body[2 * 3 + c];
+		}
+	}
+	fl_rows_to_quat(rows, camera->ori);
+
+	/* Eye position: seat-relative metres -> body game axes -> world units. */
+	{
+		const float upm       = 1.0f / AERON_OPT_METERS_PER_UNIT;
+		const float local[3]  = { eye->position_m[0] * upm, -eye->position_m[1] * upm, -eye->position_m[2] * upm };
+		for (int axis = 0; axis < 3; ++axis) {
+			camera->pos[axis] +=
+				body[0 * 3 + axis] * local[0] + body[1 * 3 + axis] * local[1] + body[2 * 3 + axis] * local[2];
+		}
+	}
+
+	{
+		const float tl = eye->tan_left, tr = eye->tan_right, tu = eye->tan_up, td = eye->tan_down;
+		camera->h_half_rad    = atanf((tl + tr) * 0.5f);
+		camera->v_half_rad    = atanf((tu + td) * 0.5f);
+		camera->proj_x_offset = (tl - tr) / (tl + tr);
+		camera->proj_y_offset = (td - tu) / (tu + td);
+	}
+	camera->viewport = (AeronRectI) { 0, 0, eye->target_width, eye->target_height };
 }
 
 int XwaRemasterFlight_BuildView(const XwaFlightCamera* cam, int target_w, int target_h,
@@ -3284,7 +3343,7 @@ static void fl_draw_present(AeronCommandBuffer* cmd, AeronRenderPass* pass, Aero
 	AeronScenePresentChain_Draw(chain, pass, s.present_scene_tex, s.present_sampler, s.present_bloom_tex,
 								s.map_present ? 0.0f : AeronSceneBloom_Intensity(), s.rt_w, s.rt_h,
 								/*bar_y_uv=*/1.0f, present_tint, /*src_coverage=*/0);
-	if (s.suppress_hud) {
+	if (s.suppress_hud || fl_eye) {
 		return;
 	}
 	if (!s.map_present) {
@@ -3725,7 +3784,10 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 	}
 	memcpy(s.origin_world, flight_view.origin_world, sizeof s.origin_world);
 	memcpy(s.camera_local, flight_view.camera.pos, sizeof s.camera_local);
-	XwaRemasterHud_PrepareFrame(cmd, snap, assets, &flight_view, s.rt_w, s.rt_h);
+	if (!fl_eye) {
+		/* VR eyes skip the HUD; it is drawn once into the overlay frame. */
+		XwaRemasterHud_PrepareFrame(cmd, snap, assets, &flight_view, s.rt_w, s.rt_h);
+	}
 	fl_quat_to_mat3(flight_view.camera.ori, s.crows);
 	const uint64_t host_time_us = XwaTime_GetElapsedUs();
 	if (cam->map_mode) {
@@ -3756,7 +3818,8 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 	 * buffer invalidated via NULL prev_view_proj). */
 	const XwaSnapshot* prev = XwaSnapshot_Previous();
 	XwaRemasterFlightView previous_flight_view;
-	const int mb_on = s.mb_quality > 0 || s.fsr_mode != AERON_TEMPORAL_OFF;
+	/* Temporal history is per view; two eyes per frame would mix it. */
+	const int mb_on = !fl_eye && (s.mb_quality > 0 || s.fsr_mode != AERON_TEMPORAL_OFF);
 	s.mb_enabled = 0;
 	int mb_regen = 0;
 	int paused = 0;
@@ -3919,7 +3982,13 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 												  : FL_FSR_RESET_MOTION_CONTEXT_UNKNOWN);
 	}
 	fl_set_temporal(host_time_us, 1);
-	if (!AeronScene_Begin(s.scene, &flight_view.camera)) {
+	AeronSceneCamera scene_camera = flight_view.camera;
+	if (fl_eye) {
+		fl_apply_vr_eye(&scene_camera, fl_eye);
+	}
+	/* The second VR eye reuses the first eye's shadow cascades. */
+	AeronScene_SetDirectionalShadowReuse(s.scene, fl_eye && fl_eye_index > 0);
+	if (!AeronScene_Begin(s.scene, &scene_camera)) {
 		Aeron_CommandBufferSetFailure(cmd, "Flight scene initialization failed");
 		s.snap = NULL;
 		return NULL;
@@ -4021,8 +4090,11 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 	 * fraction. This preserves the calibrated step-8 appearance. */
 	const int mb_allow = !paused || s.mb_pause_keep_blur;
 	const float mb_shutter = mb_allow ? fl_mb_logical_frame_shutter() : 0.0f;
+	/* VR eyes skip SSAO: it doubles with the eye count and its screen-space
+	 * occlusion does not match between the two eyes anyway. */
+	const int ssao_quality = fl_eye ? 0 : s.ssao.ssao_quality;
 	AeronScene_SetPost(s.scene, &(AeronScenePostDesc) {
-									.ssao_quality = s.ssao.ssao_quality,
+									.ssao_quality = ssao_quality,
 									.ssao_intensity = s.ssao.ssao_intensity,
 									.ssao_power = s.ssao.ssao_power,
 									.ssao_radius_view = s.ssao.ssao_radius_view,
@@ -4052,7 +4124,7 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 		.rt_h = (float)render_h,
 		.direct = s.ssao.ssao_direct,
 	};
-	const int ao_on = s.ssao.ssao_quality > 0 && s.ssao.ssao_intensity > 0.0f;
+	const int ao_on = ssao_quality > 0 && s.ssao.ssao_intensity > 0.0f;
 
 	s.bolt_count = 0;
 	s.table_count = 0;
@@ -4375,3 +4447,98 @@ void XwaRemasterFlight_Shutdown(void) {
 	}
 	memset(&s, 0, sizeof s);
 }
+
+/* ---- VR stereo ---------------------------------------------------------- */
+
+AeronTexture* XwaRemasterFlight_RenderEye(AeronCommandBuffer* cmd, const XwaSnapshot* snap,
+										  XwaRemasterAssets* assets, const XwaVrStereoEye* eye, int eye_index) {
+	AeronTexture* texture;
+
+	if (!eye || eye->target_width <= 0 || eye->target_height <= 0 || eye->tan_left + eye->tan_right <= 0.0f ||
+		eye->tan_up + eye->tan_down <= 0.0f) {
+		return NULL;
+	}
+	fl_eye       = eye;
+	fl_eye_index = eye_index;
+	texture      = XwaRemasterFlight_Render(cmd, snap, assets, eye->target_width, eye->target_height, 0);
+	fl_eye       = NULL;
+	fl_eye_index = 0;
+	if (s.scene) {
+		AeronScene_SetDirectionalShadowReuse(s.scene, 0);
+	}
+	return texture;
+}
+
+AeronTexture* XwaRemasterFlight_RenderHudOverlay(AeronCommandBuffer* cmd, const XwaSnapshot* snap,
+												 XwaRemasterAssets* assets, int target_w, int target_h) {
+	XwaRemasterFlightView view;
+
+	if (!cmd || !snap || !assets || !snap->flight_camera_valid || target_w <= 0 || target_h <= 0 ||
+		!XwaRemasterFlight_BuildView(&snap->flight_camera, target_w, target_h, &view)) {
+		return NULL;
+	}
+	if (!fl_vr_hud_rt || fl_vr_hud_w != target_w || fl_vr_hud_h != target_h) {
+		if (fl_vr_hud_rt) {
+			Aeron_DestroyRenderTarget(fl_vr_hud_rt);
+		}
+		fl_vr_hud_rt = Aeron_CreateRenderTarget(&(AeronRenderTargetDesc) { .width = target_w,
+																			  .height = target_h,
+																			  .format = AERON_TEXTURE_FORMAT_RGBA16_FLOAT,
+																			  .debug_name = "xwa.flight.vr_hud" });
+		if (!fl_vr_hud_rt) {
+			fl_vr_hud_w = fl_vr_hud_h = 0;
+			return NULL;
+		}
+		fl_vr_hud_w = target_w;
+		fl_vr_hud_h = target_h;
+	}
+	XwaRemasterHud_PrepareFrame(cmd, snap, assets, &view, target_w, target_h);
+
+	/* Frustum edges of this HUD frame (see fl_build_view_at_origin):
+	 * ndc_x = x/(z tanH) + off_x, ndc_y = -y/(z tanV) + off_y, y down. */
+	{
+		const float th = tanf(view.camera.h_half_rad);
+		const float tv = tanf(view.camera.v_half_rad);
+		fl_vr_hud_tan[0]    = th * (1.0f + view.camera.proj_x_offset); /* left */
+		fl_vr_hud_tan[1]    = th * (1.0f - view.camera.proj_x_offset); /* right */
+		fl_vr_hud_tan[2]    = tv * (1.0f - view.camera.proj_y_offset); /* up */
+		fl_vr_hud_tan[3]    = tv * (1.0f + view.camera.proj_y_offset); /* down */
+		fl_vr_hud_tan_valid = 1;
+	}
+
+	AeronRenderPass* pass = Aeron_BeginRenderPass(&(AeronRenderPassDesc) {
+		.color_target = fl_vr_hud_rt,
+		.clear_color = 1,
+		.clear_color_rgba = { 0.0f, 0.0f, 0.0f, 0.0f },
+		.command_buffer = cmd,
+		.debug_label = "OpenXWA VR HUD overlay",
+	});
+	if (!pass) {
+		return NULL;
+	}
+	{
+		const AeronRectI full_target = { 0, 0, target_w, target_h };
+		Aeron_SetViewport(pass, &full_target);
+		Aeron_SetScissor(pass, &full_target);
+	}
+	XwaRemasterHud_RenderTargetBoxes(cmd, pass, fl_vr_hud_rt, target_w, target_h, XWA_HUD_TARGET_BOX_BEFORE_FIXED);
+	XwaRemasterHud_RenderFixed(cmd, pass, fl_vr_hud_rt, target_w, target_h);
+	XwaRemasterHud_RenderTargetBoxes(cmd, pass, fl_vr_hud_rt, target_w, target_h, XWA_HUD_TARGET_BOX_AFTER_FIXED);
+	XwaRemasterHud_RenderCmd(cmd, pass, fl_vr_hud_rt, target_w, target_h);
+	XwaRemasterHud_RenderText(cmd, pass, fl_vr_hud_rt, target_w, target_h);
+	Aeron_EndRenderPass(pass);
+	return Aeron_RenderTargetGetTexture(fl_vr_hud_rt);
+}
+
+int XwaRemasterVr_HudTangents(float* tan_left, float* tan_right, float* tan_up, float* tan_down) {
+	if (!fl_vr_hud_tan_valid) {
+		return 0;
+	}
+	*tan_left  = fl_vr_hud_tan[0];
+	*tan_right = fl_vr_hud_tan[1];
+	*tan_up    = fl_vr_hud_tan[2];
+	*tan_down  = fl_vr_hud_tan[3];
+	return 1;
+}
+
+float XwaRemasterVr_WorldUnitsPerMetre(void) { return 1.0f / AERON_OPT_METERS_PER_UNIT; }
