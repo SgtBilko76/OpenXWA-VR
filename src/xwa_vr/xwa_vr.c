@@ -881,8 +881,10 @@ static void vr_update_mouse_buttons(int in_flight) {
  * up/right/down/left, the right stick click becomes back and the left stick
  * click becomes guide and the left trigger becomes the left shoulder. */
 static void vr_update_gamepad(int in_flight, float dt) {
-	const XrVector2f left  = g_vr.stick[VR_LEFT];
-	const XrVector2f right = g_vr.stick[VR_RIGHT];
+	/* Sticks swapped: physical right stick = roll + throttle lever, physical
+	 * left stick = pitch/yaw; the stick clicks swap with them. */
+	const XrVector2f left  = g_vr.stick[VR_RIGHT];
+	const XrVector2f right = g_vr.stick[VR_LEFT];
 	const int        shift = g_vr.grip[VR_LEFT] > 0.5f;
 	float            roll;
 	float            lever_input;
@@ -935,10 +937,10 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_DPAD_UP, shift && g_vr.button_y);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
 								 vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, !shift && g_vr.stick_click[VR_LEFT]);
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_GUIDE, shift && g_vr.stick_click[VR_LEFT]);
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK, !shift && g_vr.stick_click[VR_RIGHT]);
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_BACK, shift && g_vr.stick_click[VR_RIGHT]);
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, !shift && g_vr.stick_click[VR_RIGHT]);
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_GUIDE, shift && g_vr.stick_click[VR_RIGHT]);
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK, !shift && g_vr.stick_click[VR_LEFT]);
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_BACK, shift && g_vr.stick_click[VR_LEFT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_START, g_vr.button_menu);
 	SDL_UnlockJoysticks();
 }

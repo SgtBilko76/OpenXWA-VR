@@ -36,21 +36,21 @@ remapped in Options > Game Controller Options):
 
 | Input | Action |
 |---|---|
-| Right stick | Pitch and yaw |
-| Left stick left/right | Roll |
-| Left stick up/down | Throttle lever (stays where you leave it) |
+| Left stick | Pitch and yaw |
+| Right stick left/right | Roll |
+| Right stick up/down | Throttle lever (stays where you leave it) |
 | Right trigger | Fire |
 | Right grip | Pick target in sight |
 | A / B | Next target / cycle weapons |
 | X / Y | Fighters targeting you / nearest fighter |
-| Right stick click | Cycle firing mode (link fire) |
-| Left stick click | Match target speed |
+| Left stick click | Cycle firing mode (link fire) |
+| Right stick click | Match target speed |
 | Left trigger | Confirm (Space) |
 | Menu | Options screen |
 | Left grip + A / B | Laser / shield recharge rate |
 | Left grip + X / Y | Previous target / target components |
-| Left grip + right stick click | Nearest objective |
-| Left grip + left stick click | Hyperspace |
+| Left grip + left stick click | Nearest objective |
+| Left grip + right stick click | Hyperspace |
 | Left grip + left trigger | Pick up targeted cargo (Shift-P) |
 
 ## Build (Linux host)
