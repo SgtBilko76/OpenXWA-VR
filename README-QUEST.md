@@ -44,13 +44,13 @@ remapped in Options > Game Controller Options):
 | A / B | Next target / cycle weapons |
 | X / Y | Fighters targeting you / nearest fighter |
 | Left stick click | Cycle firing mode (link fire) |
-| Right stick click | Match target speed |
+| Right stick click | Hyperspace |
 | Left trigger | Confirm (Space) |
 | Menu | Options screen |
 | Left grip + A / B | Laser / shield recharge rate |
 | Left grip + X / Y | Previous target / target components |
 | Left grip + left stick click | Nearest objective |
-| Left grip + right stick click | Hyperspace |
+| Left grip + right stick click | Match target speed |
 | Left grip + left trigger | Pick up targeted cargo (Shift-P) |
 
 ## Build (Linux host)

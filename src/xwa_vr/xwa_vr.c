@@ -898,8 +898,10 @@ static void vr_update_mouse_buttons(int in_flight) {
  * leaves the lever where it is (the game applies the throttle axis only when
  * it changes, so a spring-centred stick would keep snapping to half speed).
  * The left grip is a shift key: while held, Y/B/A/X become D-pad
- * up/right/down/left, the right stick click becomes back and the left stick
- * click becomes guide and the left trigger becomes the left shoulder. */
+ * up/right/down/left and the left trigger becomes the left shoulder.
+ * Stick clicks: physical right click = guide (hyperspace), left grip + right
+ * click = left stick (match speed); physical left click = right stick,
+ * left grip + left click = back. */
 static void vr_update_gamepad(int in_flight, float dt) {
 	/* Sticks swapped: physical right stick = roll + throttle lever, physical
 	 * left stick = pitch/yaw; the stick clicks swap with them. */
@@ -957,8 +959,9 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_DPAD_UP, shift && g_vr.button_y);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
 								 vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, !shift && g_vr.stick_click[VR_RIGHT]);
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_GUIDE, shift && g_vr.stick_click[VR_RIGHT]);
+	/* Right stick click alone = guide (hyperspace), with left grip = left stick (match speed). */
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_GUIDE, !shift && g_vr.stick_click[VR_RIGHT]);
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, shift && g_vr.stick_click[VR_RIGHT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK, !shift && g_vr.stick_click[VR_LEFT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_BACK, shift && g_vr.stick_click[VR_LEFT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_START, g_vr.button_menu);
