@@ -9,7 +9,8 @@
  *  - a virtual SDL gamepad (sticks, throttle, fire, target-in-sights) that the
  *    game's existing controller support picks up,
  *  - injected keyboard shortcuts for the remaining flight commands,
- *  - a laser pointer + clicks for the mouse-driven menus.
+ *  - a laser pointer + clicks for the mouse-driven menus,
+ *  - a virtual keyboard (vr_keyboard.c) while a text field takes input.
  */
 #include "xwa_vr/xwa_vr.h"
 
@@ -24,6 +25,8 @@
 #include "aeron/aeron.h"
 #include "aeron/external_present.h"
 #include "xwa_remaster/vr_stereo.h"
+#include "xwa_vr/vr_keyboard.h"
+#include "xwa/frontend/frontend_text.h"
 #include "xwa_runtime/runtime/flight_task.h"
 #include "xwa/flight/flight_display.h"
 #include "xwa/flight/hangar.h"
@@ -56,6 +59,13 @@ static const float VR_SCREEN_WIDTH_FLIGHT = 4.0f;
  * camera, so the distance only sets its stereo depth). */
 static const float VR_EYE_SCALE    = 0.80f;
 static const float VR_HUD_DISTANCE = 3.0f;
+/* Virtual keyboard: a desk-like panel below the screen, tilted towards the
+ * player, shown in menus while a text field (pilot name...) takes input. */
+static const float    VR_KB_DISTANCE   = 1.4f;
+static const float    VR_KB_HEIGHT     = -0.55f;
+static const float    VR_KB_TILT_DEG   = -35.0f;
+static const float    VR_KB_WIDTH_M    = 1.1f;
+static const uint64_t VR_KB_LINGER_MS  = 300; /* hide after the field stops asking for text */
 
 typedef enum VrHand { VR_LEFT = 0, VR_RIGHT = 1, VR_HAND_COUNT = 2 } VrHand;
 
@@ -185,6 +195,22 @@ static struct {
 	uint16_t              rumble_low, rumble_high;
 	/* Injected keys currently held, per slot */
 	SDL_Scancode          held_key[VR_KEY_SLOT_COUNT];
+	/* Virtual keyboard */
+	XrSwapchain           kb_swapchain;
+	SDL_GPUTexture**      kb_images;
+	SDL_GPUTransferBuffer* kb_transfer;
+	uint8_t*              kb_pixels;
+	int                   kb_bgra;
+	int                   kb_ever_released;
+	int                   kb_visible;
+	int                   kb_dirty;
+	int                   kb_drawn_flash;
+	unsigned int          kb_serial;
+	uint64_t              kb_active_ms;
+	VrKeyboard            kb;
+	int                   kb_hit[VR_HAND_COUNT];
+	int                   kb_held_key[VR_HAND_COUNT];
+	uint64_t              kb_repeat_ms[VR_HAND_COUNT];
 } g_vr;
 
 /* ------------------------------------------------------------------------ */
@@ -624,6 +650,8 @@ static SDL_GPUTextureFormat vr_pick_format(int* out_ok) {
 	return chosen;
 }
 
+static void vr_create_keyboard(SDL_GPUTextureFormat format, const XrSwapchainCreateInfo* base);
+
 static int vr_device_created(SDL_GPUDevice* device, AeronExternalPresentTarget* target, void* userdata) {
 	XrSessionCreateInfo        session_info = { XR_TYPE_SESSION_CREATE_INFO };
 	XrReferenceSpaceCreateInfo space_info   = { XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
@@ -661,6 +689,7 @@ static int vr_device_created(SDL_GPUDevice* device, AeronExternalPresentTarget* 
 			   "SDL_CreateGPUXRSwapchain")) {
 		return 0;
 	}
+	vr_create_keyboard(format, &swap_info);
 
 	{
 		XrViewConfigurationView config[2] = { { XR_TYPE_VIEW_CONFIGURATION_VIEW },
@@ -816,14 +845,9 @@ static XrVector2f vr_get_stick(VrHand hand) {
 
 static int vr_hysteresis(int was_down, float value) { return was_down ? value > 0.35f : value > 0.65f; }
 
-/* Ray from a controller onto the virtual screen; returns screen pixels. */
-static int vr_pointer_hit(VrHand hand, float* out_x, float* out_y) {
+/* Controller aim ray in LOCAL space. */
+static int vr_locate_aim(VrHand hand, XrVector3f* origin, XrVector3f* dir) {
 	XrSpaceLocation location = { XR_TYPE_SPACE_LOCATION };
-	const float      width   = g_vr.screen_width_m;
-	const float      height  = vr_screen_height_m();
-	XrVector3f       dir;
-	XrVector3f       origin;
-	float            t, hit_x, hit_y, u, v;
 
 	if (XR_FAILED(p_xrLocateSpace(g_vr.aim_space[hand], g_vr.local_space, g_vr.frame_state.predictedDisplayTime,
 								  &location)) ||
@@ -831,8 +855,22 @@ static int vr_pointer_hit(VrHand hand, float* out_x, float* out_y) {
 		!(location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
 		return 0;
 	}
-	origin = location.pose.position;
-	dir    = vr_rotate(location.pose.orientation, (XrVector3f) { 0.0f, 0.0f, -1.0f });
+	*origin = location.pose.position;
+	*dir    = vr_rotate(location.pose.orientation, (XrVector3f) { 0.0f, 0.0f, -1.0f });
+	return 1;
+}
+
+/* Ray from a controller onto the virtual screen; returns screen pixels. */
+static int vr_pointer_hit(VrHand hand, float* out_x, float* out_y) {
+	const float      width   = g_vr.screen_width_m;
+	const float      height  = vr_screen_height_m();
+	XrVector3f       dir;
+	XrVector3f       origin;
+	float            t, hit_x, hit_y, u, v;
+
+	if (!vr_locate_aim(hand, &origin, &dir)) {
+		return 0;
+	}
 	if (dir.z > -1e-4f) {
 		return 0;
 	}
@@ -861,7 +899,8 @@ static void vr_update_pointer(void) {
 			g_vr.pointer_hand = (VrHand)hand;
 		}
 	}
-	g_vr.pointer_valid = vr_pointer_hit(g_vr.pointer_hand, &x, &y);
+	/* A ray on the virtual keyboard doesn't also point at the screen. */
+	g_vr.pointer_valid = !g_vr.kb_hit[g_vr.pointer_hand] && vr_pointer_hit(g_vr.pointer_hand, &x, &y);
 	if (g_vr.pointer_valid) {
 		g_vr.pointer_x = x;
 		g_vr.pointer_y = y;
@@ -994,6 +1033,235 @@ static void vr_update_menu_keys(int in_flight) {
 	vr_set_key(VR_KEY_RIGHT, SDL_SCANCODE_RIGHT, menu && lx > (g_vr.held_key[VR_KEY_RIGHT] ? 0.4f : 0.7f));
 }
 
+/* ------------------------------------------------------------------------ */
+/* Virtual keyboard                                                         */
+
+static XrQuaternionf vr_kb_orientation(void) {
+	const float half = VR_KB_TILT_DEG * SDL_PI_F / 360.0f;
+	return (XrQuaternionf) { sinf(half), 0.0f, 0.0f, cosf(half) };
+}
+
+static float vr_kb_height_m(void) { return VR_KB_WIDTH_M * (float)VR_KB_HEIGHT_PX / (float)VR_KB_WIDTH_PX; }
+
+/* Ray from a controller onto the keyboard panel; returns 0..1 image coords. */
+static int vr_kb_hit(VrHand hand, float* out_u, float* out_v) {
+	XrQuaternionf inverse = vr_kb_orientation();
+	XrVector3f    origin, dir;
+	float         t, u, v;
+
+	if (!vr_locate_aim(hand, &origin, &dir)) {
+		return 0;
+	}
+	inverse.x = -inverse.x;
+	origin.y -= VR_KB_HEIGHT;
+	origin.z += VR_KB_DISTANCE;
+	origin = vr_rotate(inverse, origin);
+	dir    = vr_rotate(inverse, dir);
+	if (dir.z > -1e-4f) {
+		return 0;
+	}
+	t = -origin.z / dir.z;
+	if (t <= 0.0f) {
+		return 0;
+	}
+	u = (origin.x + dir.x * t) / VR_KB_WIDTH_M + 0.5f;
+	v = 0.5f - (origin.y + dir.y * t) / vr_kb_height_m();
+	if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f) {
+		return 0;
+	}
+	*out_u = u;
+	*out_v = v;
+	return 1;
+}
+
+static void vr_kb_haptic(VrHand hand) {
+	XrHapticActionInfo info      = { XR_TYPE_HAPTIC_ACTION_INFO };
+	XrHapticVibration  vibration = { XR_TYPE_HAPTIC_VIBRATION };
+
+	info.action         = g_vr.act_haptic;
+	info.subactionPath  = g_vr.hand_path[hand];
+	vibration.amplitude = 0.4f;
+	vibration.duration  = 15000000; /* 15 ms */
+	vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+	p_xrApplyHapticFeedback(g_vr.session, &info, (const XrHapticBaseHeader*)&vibration);
+}
+
+static void vr_kb_type(int key, uint64_t now_ms) {
+	const VrKeyKind kind = VrKeyboard_KeyKind(key);
+	const char*     text = VrKeyboard_Press(&g_vr.kb, key, now_ms);
+
+	g_vr.kb_dirty = 1;
+	if (kind == VR_KEY_KIND_BACKSPACE || kind == VR_KEY_KIND_ENTER) {
+		const SDL_Scancode scancode = kind == VR_KEY_KIND_BACKSPACE ? SDL_SCANCODE_BACKSPACE : SDL_SCANCODE_RETURN;
+		vr_push_key(scancode, 1);
+		vr_push_key(scancode, 0);
+	} else if (text) {
+		SDL_Event event;
+		SDL_zero(event);
+		event.type           = SDL_EVENT_TEXT_INPUT;
+		event.text.timestamp = SDL_GetTicksNS();
+		event.text.text      = text; /* static string; SDL copies it anyway */
+		SDL_PushEvent(&event);
+	}
+}
+
+/* Shows the keyboard while a game text field takes input (outside flight),
+ * tracks both controller rays on it and types on trigger presses. Backspace
+ * repeats while held. Runs before vr_update_pointer, which leaves the screen
+ * cursor alone while the pointer hand aims at the keyboard. */
+static void vr_update_keyboard(int flying) {
+	const uint64_t now_ms = SDL_GetTicks();
+	int            visible;
+
+	if (g_textFieldEditSerial != g_vr.kb_serial) {
+		g_vr.kb_serial    = g_textFieldEditSerial;
+		g_vr.kb_active_ms = now_ms;
+	}
+	visible = g_vr.kb_swapchain && !flying && g_vr.kb_active_ms && now_ms - g_vr.kb_active_ms < VR_KB_LINGER_MS;
+	if (visible && !g_vr.kb_visible) {
+		VrKeyboard_Reset(&g_vr.kb);
+		g_vr.kb_dirty = 1;
+		Aeron_LogInfo(VR_LOG, "virtual keyboard shown");
+	}
+	g_vr.kb_visible = visible;
+
+	for (int hand = 0; hand < VR_HAND_COUNT; ++hand) {
+		const int was_down = g_vr.trigger_down[hand];
+		const int down     = vr_hysteresis(was_down, g_vr.trigger[hand]);
+		int       key      = VR_KB_NO_KEY;
+		float     u, v;
+
+		g_vr.kb_hit[hand] = visible && vr_kb_hit((VrHand)hand, &u, &v);
+		if (g_vr.kb_hit[hand]) {
+			key = VrKeyboard_KeyAt(u, v);
+		}
+		if (key != g_vr.kb.hover[hand]) {
+			g_vr.kb.hover[hand] = key;
+			g_vr.kb_dirty       = 1;
+		}
+		if (!down || key == VR_KB_NO_KEY) {
+			g_vr.kb_held_key[hand] = VR_KB_NO_KEY;
+			continue;
+		}
+		if (!was_down) {
+			vr_kb_type(key, now_ms);
+			vr_kb_haptic((VrHand)hand);
+			g_vr.kb_held_key[hand]  = key;
+			g_vr.kb_repeat_ms[hand] = now_ms + 450;
+		} else if (key == g_vr.kb_held_key[hand] && VrKeyboard_KeyKind(key) == VR_KEY_KIND_BACKSPACE &&
+				   now_ms >= g_vr.kb_repeat_ms[hand]) {
+			vr_kb_type(key, now_ms);
+			g_vr.kb_repeat_ms[hand] = now_ms + 70;
+		}
+	}
+	if (g_vr.kb_drawn_flash && now_ms >= g_vr.kb.flash_until_ms) {
+		g_vr.kb_dirty = 1;
+	}
+}
+
+/* Redraws the keyboard image into its swapchain when it changed. */
+static void vr_upload_keyboard(void) {
+	XrSwapchainImageAcquireInfo acquire_info = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
+	XrSwapchainImageWaitInfo    wait_info    = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+	XrSwapchainImageReleaseInfo release_info = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+	const size_t                bytes        = (size_t)VR_KB_WIDTH_PX * VR_KB_HEIGHT_PX * 4;
+	const uint64_t              now_ms       = SDL_GetTicks();
+	uint32_t                    index        = 0;
+	SDL_GPUCommandBuffer*       command_buffer;
+	SDL_GPUCopyPass*            copy_pass;
+	SDL_GPUTextureTransferInfo  source;
+	SDL_GPUTextureRegion        region;
+	void*                       mapped;
+
+	if (!g_vr.kb_visible || !g_vr.kb_dirty || !g_vr.frame_begun) {
+		return;
+	}
+	VrKeyboard_Render(&g_vr.kb, g_vr.kb_pixels, g_vr.kb_bgra, now_ms);
+	g_vr.kb_drawn_flash = g_vr.kb.flash_key != VR_KB_NO_KEY && now_ms < g_vr.kb.flash_until_ms;
+
+	mapped = SDL_MapGPUTransferBuffer(g_vr.device, g_vr.kb_transfer, true);
+	if (!mapped) {
+		return;
+	}
+	memcpy(mapped, g_vr.kb_pixels, bytes);
+	SDL_UnmapGPUTransferBuffer(g_vr.device, g_vr.kb_transfer);
+
+	if (!vr_ok(p_xrAcquireSwapchainImage(g_vr.kb_swapchain, &acquire_info, &index), "xrAcquireSwapchainImage(kb)")) {
+		return;
+	}
+	wait_info.timeout = XR_INFINITE_DURATION;
+	if (!vr_ok(p_xrWaitSwapchainImage(g_vr.kb_swapchain, &wait_info), "xrWaitSwapchainImage(kb)")) {
+		p_xrReleaseSwapchainImage(g_vr.kb_swapchain, &release_info);
+		return;
+	}
+	command_buffer = SDL_AcquireGPUCommandBuffer(g_vr.device);
+	if (command_buffer) {
+		SDL_zero(source);
+		SDL_zero(region);
+		source.transfer_buffer = g_vr.kb_transfer;
+		source.pixels_per_row  = VR_KB_WIDTH_PX;
+		source.rows_per_layer  = VR_KB_HEIGHT_PX;
+		region.texture         = g_vr.kb_images[index];
+		region.w               = VR_KB_WIDTH_PX;
+		region.h               = VR_KB_HEIGHT_PX;
+		region.d               = 1;
+		copy_pass              = SDL_BeginGPUCopyPass(command_buffer);
+		SDL_UploadToGPUTexture(copy_pass, &source, &region, false);
+		SDL_EndGPUCopyPass(copy_pass);
+		if (SDL_SubmitGPUCommandBuffer(command_buffer)) {
+			g_vr.kb_dirty = 0;
+		} else {
+			Aeron_LogError(VR_LOG, "keyboard upload failed: %s", SDL_GetError());
+		}
+	}
+	p_xrReleaseSwapchainImage(g_vr.kb_swapchain, &release_info);
+	g_vr.kb_ever_released = 1;
+}
+
+static void vr_create_keyboard(SDL_GPUTextureFormat format, const XrSwapchainCreateInfo* base) {
+	XrSwapchainCreateInfo         info     = *base;
+	SDL_GPUTransferBufferCreateInfo transfer = { 0 };
+
+	info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT |
+					  XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
+	info.width  = VR_KB_WIDTH_PX;
+	info.height = VR_KB_HEIGHT_PX;
+	if (!vr_ok(SDL_CreateGPUXRSwapchain(g_vr.device, g_vr.session, &info, format, &g_vr.kb_swapchain, &g_vr.kb_images),
+			   "SDL_CreateGPUXRSwapchain(keyboard)")) {
+		g_vr.kb_swapchain = XR_NULL_HANDLE;
+		g_vr.kb_images    = NULL;
+		return;
+	}
+	transfer.usage    = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+	transfer.size     = (Uint32)VR_KB_WIDTH_PX * VR_KB_HEIGHT_PX * 4;
+	g_vr.kb_transfer  = SDL_CreateGPUTransferBuffer(g_vr.device, &transfer);
+	g_vr.kb_pixels    = SDL_malloc(transfer.size);
+	g_vr.kb_bgra      = format == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB || format == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+	if (!g_vr.kb_transfer || !g_vr.kb_pixels) {
+		Aeron_LogError(VR_LOG, "virtual keyboard unavailable: %s", SDL_GetError());
+		SDL_DestroyGPUXRSwapchain(g_vr.device, g_vr.kb_swapchain, g_vr.kb_images);
+		g_vr.kb_swapchain = XR_NULL_HANDLE;
+		g_vr.kb_images    = NULL;
+		return;
+	}
+	VrKeyboard_Reset(&g_vr.kb);
+	Aeron_LogInfo(VR_LOG, "virtual keyboard ready (%dx%d)", VR_KB_WIDTH_PX, VR_KB_HEIGHT_PX);
+}
+
+static void vr_destroy_keyboard(SDL_GPUDevice* device) {
+	if (g_vr.kb_swapchain) {
+		SDL_DestroyGPUXRSwapchain(device, g_vr.kb_swapchain, g_vr.kb_images);
+		g_vr.kb_swapchain = XR_NULL_HANDLE;
+		g_vr.kb_images    = NULL;
+	}
+	if (g_vr.kb_transfer) {
+		SDL_ReleaseGPUTransferBuffer(device, g_vr.kb_transfer);
+		g_vr.kb_transfer = NULL;
+	}
+	SDL_free(g_vr.kb_pixels);
+	g_vr.kb_pixels = NULL;
+}
+
 static void vr_update_haptics(void) {
 	const uint16_t strength = g_vr.rumble_low > g_vr.rumble_high ? g_vr.rumble_low : g_vr.rumble_high;
 	XrHapticActionInfo info = { XR_TYPE_HAPTIC_ACTION_INFO };
@@ -1044,6 +1312,7 @@ static void vr_update_input(void) {
 	flying = in_flight && !vr_flight_menu_active();
 
 	vr_create_pad();
+	vr_update_keyboard(flying);
 	vr_update_pointer();
 	vr_update_mouse_buttons(flying);
 	vr_update_gamepad(flying, dt);
@@ -1160,6 +1429,7 @@ static int vr_begin_frame(void* userdata) {
 	}
 	g_vr.frame_begun = 1;
 	vr_update_input();
+	vr_upload_keyboard();
 	vr_prepare_stereo();
 	return 1;
 }
@@ -1195,9 +1465,10 @@ static void vr_end_xr_frame(void) {
 	XrFrameEndInfo                     end_info = { XR_TYPE_FRAME_END_INFO };
 	XrCompositionLayerPassthroughFB    passthrough = { XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB };
 	XrCompositionLayerQuad             quad        = { XR_TYPE_COMPOSITION_LAYER_QUAD };
+	XrCompositionLayerQuad             kb_quad     = { XR_TYPE_COMPOSITION_LAYER_QUAD };
 	XrCompositionLayerProjection       projection  = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
 	XrCompositionLayerProjectionView   proj_views[2];
-	const XrCompositionLayerBaseHeader* layers[3];
+	const XrCompositionLayerBaseHeader* layers[4];
 	uint32_t                           layer_count = 0;
 	const int                          in_flight   = vr_in_flight();
 	const int stereo = g_vr.stereo_published && g_vr.views_valid && XwaRemasterVr_StereoRendered();
@@ -1265,6 +1536,21 @@ static void vr_end_xr_frame(void) {
 			}
 			layers[layer_count++]                 = (const XrCompositionLayerBaseHeader*)&quad;
 		}
+		if (g_vr.kb_visible && g_vr.kb_ever_released) {
+			/* Premultiplied alpha, drawn over the screen. */
+			kb_quad.layerFlags                       = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+			kb_quad.space                            = g_vr.local_space;
+			kb_quad.eyeVisibility                    = XR_EYE_VISIBILITY_BOTH;
+			kb_quad.subImage.swapchain               = g_vr.kb_swapchain;
+			kb_quad.subImage.imageRect.extent.width  = VR_KB_WIDTH_PX;
+			kb_quad.subImage.imageRect.extent.height = VR_KB_HEIGHT_PX;
+			kb_quad.pose.orientation                 = vr_kb_orientation();
+			kb_quad.pose.position.y                  = VR_KB_HEIGHT;
+			kb_quad.pose.position.z                  = -VR_KB_DISTANCE;
+			kb_quad.size.width                       = VR_KB_WIDTH_M;
+			kb_quad.size.height                      = vr_kb_height_m();
+			layers[layer_count++]                    = (const XrCompositionLayerBaseHeader*)&kb_quad;
+		}
 	}
 	end_info.displayTime          = g_vr.frame_state.predictedDisplayTime;
 	end_info.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -1292,6 +1578,7 @@ static void vr_shutdown(SDL_GPUDevice* device, void* userdata) {
 		p_xrDestroyPassthroughFB(g_vr.passthrough);
 	}
 	vr_release_eye_images();
+	vr_destroy_keyboard(device);
 	for (int eye = 0; eye < 2; ++eye) {
 		if (g_vr.eye_swapchain[eye]) {
 			SDL_DestroyGPUXRSwapchain(device, g_vr.eye_swapchain[eye], g_vr.eye_images[eye]);

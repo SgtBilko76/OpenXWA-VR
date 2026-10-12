@@ -196,6 +196,9 @@ int g_activeTextFieldId;
 int g_textFieldColor;
 // GLOBAL: XWA 0x7833EC
 int g_textFieldColorInitialized;
+/* OpenXWA: bumped every frame a text field takes keyboard input, so the Quest
+ * VR layer knows when to show its virtual keyboard. */
+unsigned int g_textFieldEditSerial;
 
 static void FrontendText_DecodeFontHeader(BitmapFont* font, const unsigned char* diskHeader) {
 	int i;
@@ -1489,6 +1492,7 @@ int FrontendText_DrawEditableField(FrontendRect* rect, char* text, int maxChars,
 	}
 
 	if (g_activeTextFieldId == fieldId) {
+		++g_textFieldEditSerial;
 		ch = (unsigned char)Keyboard_PeekChar();
 		ignoredScan = ignoredChars;
 		if (ignoredChars != NULL && *ignoredChars != '\0') {

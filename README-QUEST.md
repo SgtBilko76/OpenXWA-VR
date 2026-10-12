@@ -31,6 +31,11 @@ point with either controller, trigger = click, right grip = right-click,
 A = Enter, B / Menu = Escape, Y = Space, left stick = arrow keys,
 left trigger = launch from the hangar.
 
+Typing (pilot names, save names): whenever the game waits for text, a
+virtual keyboard appears below the screen. Point at a key with either
+controller and pull the trigger; Shift is on for the first letter, holding
+Back keeps deleting, Enter (or A) confirms.
+
 Flight (the Touch controllers act as one gamepad; every button can be
 remapped in Options > Game Controller Options):
 

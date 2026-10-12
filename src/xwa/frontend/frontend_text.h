@@ -37,6 +37,7 @@ extern int g_textFieldLength;
 extern int g_activeTextFieldId;
 extern int g_textFieldColor;
 extern int g_textFieldColorInitialized;
+extern unsigned int g_textFieldEditSerial;
 
 int FrontendText_ResetGlyphScratchBuffer(int frames);
 int FrontendText_ResetGlyphScratch(void);
