@@ -105,8 +105,7 @@ int XwaRemasterVr_StereoRendered(void) { return g_vr_stereo_rendered; }
 
 static int XwaRemaster_VrStereoWanted(const XwaSnapshot* snap) {
 	return g_vr_frame_valid && snap && snap->scene_kind == XWA_SCENE_FLIGHT && snap->flight_camera_valid &&
-		   !snap->flight_camera.map_mode && !snap->flight_camera.hyperspace_phase &&
-		   !XwaRemasterFlight_HyperspaceTunnelPreviewEnabled() && g_vr_frame.eyes[0].target &&
+		   !snap->flight_camera.map_mode && !XwaRemasterFlight_HyperspaceTunnelPreviewEnabled() && g_vr_frame.eyes[0].target &&
 		   g_vr_frame.eyes[1].target;
 }
 

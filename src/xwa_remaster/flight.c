@@ -3505,8 +3505,26 @@ static AeronTexture* fl_render_hyperspace(AeronCommandBuffer* cmd, const XwaSnap
 	const XwaFlightObject* player_f;
 	fl_hyper_find_poses(snap, &snap->flight_camera, anchor_bw, &anchor_found, &player_f, player_bw,
 						player_local, &player_found);
+	/* VR: the tunnel background and the streak projection follow the eye
+	 * (head pose + eye frustum), while the streak geometry stays built from
+	 * the body camera rows so both eyes see the same world-space streaks. */
+	AeronSceneCamera scene_camera = flight_view->camera;
+	float scene_view_proj[16];
+	memcpy(scene_view_proj, flight_view->view_proj, sizeof scene_view_proj);
 	XwaRemasterHyperspaceTunnelView tunnel_view;
-	fl_hyper_build_tunnel_view(&flight_view->camera, player_bw, player_found, &tunnel_view);
+	if (fl_eye) {
+		float body_rows[9];
+		fl_apply_vr_eye(&scene_camera, fl_eye);
+		AeronScene_ComputeViewProj(&scene_camera, scene_view_proj);
+		/* fl_hyper_build_tunnel_view expresses the craft axes in the view
+		 * basis held by s.crows; use the eye's basis for this call only. */
+		memcpy(body_rows, s.crows, sizeof body_rows);
+		fl_quat_to_mat3(scene_camera.ori, s.crows);
+		fl_hyper_build_tunnel_view(&scene_camera, player_bw, player_found, &tunnel_view);
+		memcpy(s.crows, body_rows, sizeof body_rows);
+	} else {
+		fl_hyper_build_tunnel_view(&scene_camera, player_bw, player_found, &tunnel_view);
+	}
 
 	float preview_time = 0.0f;
 	if (preview && host_time_us >= s.hyperspace_preview_epoch_us) {
@@ -3514,7 +3532,7 @@ static AeronTexture* fl_render_hyperspace(AeronCommandBuffer* cmd, const XwaSnap
 		preview_time = (float)fmod(elapsed_seconds, 4096.0);
 	}
 	if (!s.hyperspace ||
-		!XwaRemasterHyperspace_Prepare(s.hyperspace, cmd, snap, flight_view->view_proj, s.crows,
+		!XwaRemasterHyperspace_Prepare(s.hyperspace, cmd, snap, scene_view_proj, s.crows,
 									   s.rt_w, s.rt_h, preview, preview_time, &tunnel_view)) {
 		return NULL;
 	}
@@ -3533,7 +3551,8 @@ static AeronTexture* fl_render_hyperspace(AeronCommandBuffer* cmd, const XwaSnap
 	 * temporal reconstruction for this special scene and reset history
 	 * before returning to ordinary flight. */
 	fl_set_temporal(host_time_us, 0);
-	if (!AeronScene_Begin(s.scene, &flight_view->camera)) {
+	AeronScene_SetDirectionalShadowReuse(s.scene, 0);
+	if (!AeronScene_Begin(s.scene, &scene_camera)) {
 		Aeron_CommandBufferSetFailure(cmd, "Hyperspace scene initialization failed");
 		s.snap = NULL;
 		return NULL;
@@ -3542,9 +3561,11 @@ static AeronTexture* fl_render_hyperspace(AeronCommandBuffer* cmd, const XwaSnap
 	AeronScene_SetPassHook(s.scene, AERON_SCENE_HOOK_BEFORE_OPAQUE, fl_draw_before_opaque, NULL);
 	/* SSAO remains active for the 3D cockpit. Motion blur is deliberately
 	 * disabled: the tunnel/streak hook has no velocity attachment, and the
-	 * hyperspace effects encode their own motion in geometry and shader animation. */
+	 * hyperspace effects encode their own motion in geometry and shader animation.
+	 * VR eyes skip SSAO, as in ordinary flight. */
+	const int hyper_ssao_quality = fl_eye ? 0 : s.ssao.ssao_quality;
 	AeronScene_SetPost(s.scene, &(AeronScenePostDesc) {
-									.ssao_quality = s.ssao.ssao_quality,
+									.ssao_quality = hyper_ssao_quality,
 									.ssao_intensity = s.ssao.ssao_intensity,
 									.ssao_power = s.ssao.ssao_power,
 									.ssao_radius_view = s.ssao.ssao_radius_view,
@@ -3579,7 +3600,7 @@ static AeronTexture* fl_render_hyperspace(AeronCommandBuffer* cmd, const XwaSnap
 		.rt_h = (float)render_h,
 		.direct = s.ssao.ssao_direct,
 	};
-	const int ao_on = s.ssao.ssao_quality > 0 && s.ssao.ssao_intensity > 0.0f;
+	const int ao_on = hyper_ssao_quality > 0 && s.ssao.ssao_intensity > 0.0f;
 	XwaShipAmbientCube ambient;
 	XwaRemasterShip_GetAmbientCube(&ambient);
 	if (lighting_ready) {

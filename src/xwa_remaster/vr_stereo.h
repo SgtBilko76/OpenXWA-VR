@@ -8,7 +8,7 @@
  * renders the 3D world once per eye (head-tracked, real parallax) into the
  * host's eye textures, and renders the HUD alone on a transparent background
  * into the normal presentation frame, sized to the game camera's field of
- * view. Map, hyperspace and every non-flight scene stay on the flat path. */
+ * view. The map and every non-flight scene stay on the flat path. */
 
 #include <SDL3/SDL_gpu.h>
 

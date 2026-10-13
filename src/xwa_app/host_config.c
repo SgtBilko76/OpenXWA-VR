@@ -905,6 +905,25 @@ int XwaHostConfig_Load(AeronVfs* vfs, XwaHostConfig* out, char* error, size_t er
 		host_config_validate_input_maps(config, error, error_size) &&
 		host_config_input_options(config, 0, &out->input_options, error, error_size);
 	AeronConfigFile_Destroy(config);
+#ifdef __ANDROID__
+	if (valid) {
+		/* Quest layout change in 0.1.5: X/Y were "fighters targeting you" /
+		 * "nearest fighter", left grip + left trigger was pick-up and left grip
+		 * + Y/X were target components / previous target. Saved configs that
+		 * still carry those untouched defaults get the new layout: X = pick up,
+		 * Y = release, left grip + X/Y = fighters targeting you / nearest
+		 * fighter, left grip + left trigger = target components. */
+		uint16_t* actions = out->input_options.controller.gamepad.actions;
+		if (actions[4] == 101 && actions[5] == 114 && actions[12] == 80 && actions[16] == 44 &&
+			actions[19] == 121) {
+			actions[4]  = 80;
+			actions[5]  = 82;
+			actions[12] = 44;
+			actions[16] = 114;
+			actions[19] = 101;
+		}
+	}
+#endif
 	return valid;
 }
 

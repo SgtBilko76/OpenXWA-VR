@@ -21,8 +21,8 @@ input:
     #   A/B/X/Y = south/east/west/north; right grip = rightshoulder;
     #   stick clicks = leftstick/rightstick; menu button = start.
     #   Holding the LEFT grip turns Y/B/A/X into D-pad up/right/down/left and
-    #   the right stick click into back, the left stick click into guide and
-    #   the left trigger into leftshoulder.
+    #   the left trigger into leftshoulder. Stick clicks: right = guide, left
+    #   grip + right = leftstick, left = rightstick, left grip + left = back.
     # Every binding below is remappable in Options > Controller.
     gamepad:
       axes:
@@ -55,22 +55,22 @@ input:
         - 155 # right grip: pick target in sight
         - 116 # A: next target
         - 119 # B: cycle weapon settings
-        - 101 # X: cycle fighters targeting you
-        - 114 # Y: target nearest fighter
+        - 80  # X: pick up targeted craft (Shift-P)
+        - 82  # Y: release carried object (Shift-R)
         - 32  # left trigger: confirm (leave hangar, hyperspace)
-        - 13  # left stick click: match targeted craft's speed
-        - 120 # right stick click: cycle firing settings (link fire)
+        - 13  # left grip + right stick click: match targeted craft's speed
+        - 120 # left stick click: cycle firing settings (link fire)
         - 27  # menu: options screen
-        - 111 # left grip + right stick click: nearest objective craft
-        - 104 # left grip + left stick click: hyperspace (H)
-        - 80  # left grip + left trigger: pick up targeted craft (Shift-P)
+        - 111 # left grip + left stick click: nearest objective craft
+        - 104 # right stick click: hyperspace (H)
+        - 44  # left grip + left trigger: cycle target components
         - 0
         - 0
         - 0
-        - 44  # left grip + Y: cycle target components
+        - 114 # left grip + Y: target nearest fighter
         - 204 # left grip + B: shield recharge rate
         - 203 # left grip + A: laser recharge rate
-        - 121 # left grip + X: previous target
+        - 101 # left grip + X: cycle fighters targeting you
     joystick:
       axes:
         yaw: { source: 0, invert: false, deadzone: 0.08 }
