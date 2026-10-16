@@ -353,9 +353,9 @@ static void vr_create_pad(void) {
 	SDL_INIT_INTERFACE(&desc);
 	desc.type        = SDL_JOYSTICK_TYPE_GAMEPAD;
 	desc.naxes       = SDL_GAMEPAD_AXIS_COUNT;
-	desc.nbuttons    = SDL_GAMEPAD_BUTTON_DPAD_RIGHT + 1;
+	desc.nbuttons    = SDL_GAMEPAD_BUTTON_MISC1 + 1;
 	desc.axis_mask   = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
-	desc.button_mask = (1u << (SDL_GAMEPAD_BUTTON_DPAD_RIGHT + 1)) - 1u;
+	desc.button_mask = (1u << (SDL_GAMEPAD_BUTTON_MISC1 + 1)) - 1u;
 	desc.name        = "Quest Touch Controllers";
 	desc.vendor_id   = VR_PAD_VENDOR_ID;
 	desc.product_id  = VR_PAD_PRODUCT_ID;
@@ -937,7 +937,8 @@ static void vr_update_mouse_buttons(int in_flight) {
  * leaves the lever where it is (the game applies the throttle axis only when
  * it changes, so a spring-centred stick would keep snapping to half speed).
  * The left grip is a shift key: while held, Y/B/A/X become D-pad
- * up/right/down/left and the left trigger becomes the left shoulder.
+ * up/right/down/left, the left trigger becomes the left shoulder and the
+ * right grip becomes misc1.
  * Stick clicks: physical right click = guide (hyperspace), left grip + right
  * click = left stick (match speed); physical left click = right stick,
  * left grip + left click = back. */
@@ -968,7 +969,7 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	SDL_LockJoysticks();
 	if (!in_flight) {
 		/* Menus own the controllers: report a neutral pad (lever kept). */
-		for (int b = 0; b <= SDL_GAMEPAD_BUTTON_DPAD_RIGHT; ++b) {
+		for (int b = 0; b <= SDL_GAMEPAD_BUTTON_MISC1; ++b) {
 			SDL_SetJoystickVirtualButton(g_vr.pad, b, 0);
 		}
 		SDL_SetJoystickVirtualAxis(g_vr.pad, SDL_GAMEPAD_AXIS_RIGHTX, 0);
@@ -997,7 +998,9 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT, shift && g_vr.button_x);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_DPAD_UP, shift && g_vr.button_y);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-								 vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
+								 !shift && vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_MISC1,
+								 shift && vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
 	/* Right stick click alone = guide (hyperspace), with left grip = left stick (match speed). */
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_GUIDE, !shift && g_vr.stick_click[VR_RIGHT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, shift && g_vr.stick_click[VR_RIGHT]);

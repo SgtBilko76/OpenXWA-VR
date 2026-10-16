@@ -47,17 +47,19 @@ remapped in Options > Game Controller Options):
 | Right trigger | Fire |
 | Right grip | Pick target in sight |
 | A / B | Next target / cycle weapons |
-| X | Pick up targeted cargo (Shift-P) |
-| Y | Release carried cargo (Shift-R) |
+| X | Fighters targeting you |
+| Y | Nearest fighter |
 | Left stick click | Cycle firing mode (link fire) |
 | Right stick click | Hyperspace |
 | Left trigger | Confirm (Space) |
 | Menu | Options screen |
 | Left grip + A / B | Laser / shield recharge rate |
-| Left grip + X / Y | Fighters targeting you / nearest fighter |
+| Left grip + X | Pick up targeted cargo (Shift-P) |
+| Left grip + Y | Release carried cargo (Shift-R) |
+| Left grip + left trigger | Dock with / board targeted craft (Shift-D) |
+| Left grip + right grip | Target components |
 | Left grip + left stick click | Nearest objective |
 | Left grip + right stick click | Match target speed |
-| Left grip + left trigger | Target components |
 
 ## Build (Linux host)
 

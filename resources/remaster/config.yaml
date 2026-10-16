@@ -21,8 +21,9 @@ input:
     #   A/B/X/Y = south/east/west/north; right grip = rightshoulder;
     #   stick clicks = leftstick/rightstick; menu button = start.
     #   Holding the LEFT grip turns Y/B/A/X into D-pad up/right/down/left and
-    #   the left trigger into leftshoulder. Stick clicks: right = guide, left
-    #   grip + right = leftstick, left = rightstick, left grip + left = back.
+    #   the left trigger into leftshoulder and the right grip into misc1.
+    #   Stick clicks: right = guide, left grip + right = leftstick,
+    #   left = rightstick, left grip + left = back.
     # Every binding below is remappable in Options > Controller.
     gamepad:
       axes:
@@ -44,7 +45,7 @@ input:
         '11': 'back'
         '12': 'guide'
         '13': 'leftshoulder'
-        '14': 'none'
+        '14': 'misc1'
         '15': 'none'
         '16': 'none'
       pov: 'dpad'
@@ -55,22 +56,22 @@ input:
         - 155 # right grip: pick target in sight
         - 116 # A: next target
         - 119 # B: cycle weapon settings
-        - 80  # X: pick up targeted craft (Shift-P)
-        - 82  # Y: release carried object (Shift-R)
+        - 101 # X: cycle fighters targeting you
+        - 114 # Y: target nearest fighter
         - 32  # left trigger: confirm (leave hangar, hyperspace)
         - 13  # left grip + right stick click: match targeted craft's speed
         - 120 # left stick click: cycle firing settings (link fire)
         - 27  # menu: options screen
         - 111 # left grip + left stick click: nearest objective craft
         - 104 # right stick click: hyperspace (H)
-        - 44  # left grip + left trigger: cycle target components
+        - 68  # left grip + left trigger: dock with targeted craft (Shift-D)
+        - 44  # left grip + right grip: cycle target components
         - 0
         - 0
-        - 0
-        - 114 # left grip + Y: target nearest fighter
+        - 82  # left grip + Y: release carried object (Shift-R)
         - 204 # left grip + B: shield recharge rate
         - 203 # left grip + A: laser recharge rate
-        - 101 # left grip + X: cycle fighters targeting you
+        - 80  # left grip + X: pick up targeted craft (Shift-P)
     joystick:
       axes:
         yaw: { source: 0, invert: false, deadzone: 0.08 }

@@ -922,6 +922,24 @@ int XwaHostConfig_Load(AeronVfs* vfs, XwaHostConfig* out, char* error, size_t er
 			actions[16] = 114;
 			actions[19] = 101;
 		}
+		/* Quest layout change in 0.1.6: cargo and docking moved to the left
+		 * grip (+ X = pick up, + Y = release, + left trigger = dock, Shift-D),
+		 * X/Y went back to fighters targeting you / nearest fighter, and target
+		 * components moved to left grip + right grip (button slot 14 = misc1).
+		 * Only configs still holding the untouched 0.1.5 defaults change. */
+		AeronControllerDigitalSource* slot14 = &out->input_options.controller.gamepad.buttons[13];
+		if (actions[4] == 80 && actions[5] == 82 && actions[12] == 44 && actions[13] == 0 &&
+			actions[16] == 114 && actions[19] == 101 && slot14->kind == AERON_CONTROLLER_DIGITAL_NONE) {
+			actions[4]        = 101;
+			actions[5]        = 114;
+			actions[12]       = 68;
+			actions[13]       = 44;
+			actions[16]       = 82;
+			actions[19]       = 80;
+			slot14->kind      = AERON_CONTROLLER_DIGITAL_BUTTON;
+			slot14->index     = (uint8_t)AERON_GAMEPAD_BUTTON_MISC1;
+			slot14->threshold = XWA_CONTROLLER_DIGITAL_THRESHOLD_DEFAULT;
+		}
 	}
 #endif
 	return valid;
