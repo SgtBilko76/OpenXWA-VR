@@ -2,7 +2,11 @@
 
 Standalone Meta Quest 3 port of OpenXWA (Star Wars: X-Wing Alliance) with
 OpenXR: menus on a virtual screen over passthrough, a head-tracked stereo
-3D cockpit in flight, and Touch controller support.
+3D cockpit in flight, and Touch controller support. The X-Wing, Y-Wing,
+A-Wing, B-Wing, TIE Fighter/Interceptor, TIE Bomber and Millennium Falcon
+use the more detailed 3D cockpits from X-Wing Revival (included; their
+small built-in screens are dark); all other craft keep X-Wing Alliance's
+own cockpits.
 
 You need your own copy of X-Wing Alliance (Steam or GOG). The APK contains
 no game data.
@@ -75,3 +79,13 @@ Requirements: Android SDK + NDK 27.2.12479018, JDK 17, SDL_shadercross
 VR code lives in `src/xwa_vr/` (OpenXR session, input, layers),
 `src/xwa_remaster/vr_stereo.h` + `flight.c` (per-eye rendering) and the
 `quest-vr` branch of the Aeron engine fork (`external_present.*`).
+
+X-Wing Revival cockpits are converted at build time from Revival's free
+game data by `tools/quest/gen_revival_cockpits.py` (set `XW_REVIVAL_DATA`
+to its `gamedata` folder).
+
+## Credits
+
+3D cockpit models from [X-Wing Revival](https://www.raptor007.com/xwing/)
+by Raptor007 and its contributors (originally from the X-Wing Alliance
+Upgrade project).
