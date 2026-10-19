@@ -53,5 +53,22 @@ rm -rf "$RUNTIME/resources" "$RUNTIME/shaders"
 cp -a "$BUILD/resources" "$RUNTIME/resources"
 mkdir -p "$RUNTIME/shaders"
 cp "$BUILD"/shaders/*.spv "$RUNTIME/shaders/"
+# VR 3D cockpits from X-Wing Revival (free game; converted once by
+# tools/quest/gen_revival_cockpits.py with the host aeron_gltf_cook).
+REVIVAL_DATA="${XW_REVIVAL_DATA:-$HOME/Projekte/X-Wing-Revival-VR/build-full-data/assets/gamedata}"
+COCKPITS="$ROOT/build/vr_cockpits"
+if [[ ! -f "$COCKPITS/falcon.glb" ]]; then
+    COOK="$OUT/build-cook/aeron_gltf_cook"
+    if [[ ! -x "$COOK" ]]; then
+        cmake -S "$ROOT/aeron" -B "$OUT/build-cook" -G Ninja -DCMAKE_BUILD_TYPE=Release -DAERON_BUILD_TOOLS=ON \
+            -DAERON_SHADERCROSS_EXECUTABLE="$XWA_TOOLS/bin/shadercross"
+        cmake --build "$OUT/build-cook" --target aeron_gltf_cook --parallel "$(nproc)"
+        COOK="$(find "$OUT/build-cook" -name aeron_gltf_cook -type f -perm -u+x | head -1)"
+    fi
+    python3 "$ROOT/tools/quest/gen_revival_cockpits.py" "$COOK" "$REVIVAL_DATA" "$COCKPITS" \
+        xwing ywing awing bwing tiefighter tiebomber falcon
+fi
+mkdir -p "$RUNTIME/resources/vr_cockpits"
+cp "$COCKPITS"/*.glb "$RUNTIME/resources/vr_cockpits/"
 ls -la "$JNI"
 echo "runtime files: $(find "$RUNTIME" -type f | wc -l)"

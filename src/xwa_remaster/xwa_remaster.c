@@ -29,6 +29,7 @@
 #include "xwa_remaster/hud.h"
 #include "xwa_remaster/opt_mesh.h"
 #include "xwa_remaster/ship.h"
+#include "xwa_remaster/vr_revival_cockpit.h"
 #include "xwa_runtime/runtime/movie_task.h"
 #include "xwa_runtime/runtime/port.h"
 #include "xwa_runtime/runtime/presentation.h"
@@ -923,6 +924,7 @@ void XwaRemaster_Shutdown(void) {
 	XwaRemasterCutscene_Shutdown();
 	XwaRemasterFrontend_Shutdown();
 	XwaRemasterFlight_Shutdown();
+	XwaVrRevivalCockpit_Shutdown();
 	XwaRemasterShip_Shutdown();
 	if (g.assets) {
 		XwaRemasterAssets_Destroy(g.assets);

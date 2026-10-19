@@ -256,6 +256,7 @@ add_library(xwa_remaster STATIC
     src/xwa_remaster/hud_text.c
     src/xwa_remaster/preview.c
     src/xwa_remaster/ship.c
+    src/xwa_remaster/vr_revival_cockpit.c
     src/xwa_remaster/opt_mesh.c
     src/xwa_remaster/original_2d.c
     src/xwa_remaster/sky_stars.c

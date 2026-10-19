@@ -21,6 +21,7 @@
 #include "xwa_remaster/ship.h"
 #include "xwa_remaster/sky_stars.h"
 #include "xwa_remaster/xwa_remaster.h"
+#include "xwa_remaster/vr_revival_cockpit.h"
 #include "xwa_remaster/vr_stereo.h"
 #include "xwa_runtime/runtime/presentation.h"
 #include "xwa_runtime/timing/host_clock.h"
@@ -3232,6 +3233,21 @@ static void fl_submit_hyperspace_cockpit(AeronCommandBuffer* cmd, XwaRemasterAss
 	if (!snap->cockpit_valid || !cam->cockpit_visible || !anchor_found) {
 		return;
 	}
+	AeronSceneMesh* revival_cockpit =
+		fl_eye && snap->cockpit.seat == 0 ? XwaVrRevivalCockpit_Mesh(cmd, snap->cockpit.model_name) : NULL;
+	if (revival_cockpit) {
+		AeronSceneMeshInstance inst;
+		memset(&inst, 0, sizeof inst);
+		inst.mesh = revival_cockpit;
+		XwaVrRevivalCockpit_Matrix(s.crows, s.camera_local, inst.transform);
+		memcpy(inst.prev_transform, inst.transform, sizeof inst.transform);
+		inst.zero_velocity = 1;
+		inst.no_local_lights = 1;
+		inst.cull_mode = AERON_CULL_BACK;
+		inst.shadow_flags = AERON_SCENE_INSTANCE_NO_CAST_SHADOW;
+		AeronScene_AddMeshInstance(s.scene, &inst);
+		return;
+	}
 	AeronSceneMesh* cockpit_mesh = XwaRemasterShip_MeshForName(snap->cockpit.model_name);
 	if (!cockpit_mesh) {
 		return;
@@ -4359,7 +4375,24 @@ AeronTexture* XwaRemasterFlight_Render(AeronCommandBuffer* cmd, const XwaSnapsho
 	 * pan / 16) rotated into eye space (rotation only — the classic
 	 * g_cockpitViewActive override). Turret seats rotate the cockpit's
 	 * rotary meshes by the captured aim. */
-	if (fl_cockpit_drawn(snap, cam) && cockpit_anchor) {
+	/* Quest VR eyes: an X-Wing Revival cockpit, seat-fixed at the eye,
+	 * replaces the XWA cockpit OPT for the craft Revival has. */
+	AeronSceneMesh* revival_cockpit =
+		fl_eye && snap->cockpit.seat == 0 && fl_cockpit_drawn(snap, cam) && cockpit_anchor
+			? XwaVrRevivalCockpit_Mesh(cmd, snap->cockpit.model_name)
+			: NULL;
+	if (revival_cockpit) {
+		AeronSceneMeshInstance inst;
+		memset(&inst, 0, sizeof inst);
+		inst.mesh = revival_cockpit;
+		XwaVrRevivalCockpit_Matrix(s.crows, s.camera_local, inst.transform);
+		memcpy(inst.prev_transform, inst.transform, sizeof inst.transform);
+		inst.zero_velocity = 1;
+		inst.no_local_lights = 1;
+		inst.cull_mode = AERON_CULL_BACK;
+		inst.shadow_flags = AERON_SCENE_INSTANCE_NO_CAST_SHADOW | AERON_SCENE_INSTANCE_USE_RECEIVER_LOCAL_SHADOW;
+		AeronScene_AddMeshInstance(s.scene, &inst);
+	} else if (fl_cockpit_drawn(snap, cam) && cockpit_anchor) {
 		AeronSceneMesh* cockpit_mesh = XwaRemasterShip_MeshForName(snap->cockpit.model_name);
 		if (cockpit_mesh) {
 			float m[16];
