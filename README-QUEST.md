@@ -21,11 +21,6 @@ no game data.
    "access to all files" when Android asks (or run
    `adb shell appops set --uid com.bilko.openxwavr MANAGE_EXTERNAL_STORAGE allow`).
 
-Optional: to make hyperspace selectable in Options > Game Controller
-Options, append this line to `/sdcard/OpenXWA/JOYSTICK.TXT`:
-
-    !KEY_H!104 H Hyperspace
-
 ## Controls
 
 Hold the Meta button on the right controller to re-centre the view.
