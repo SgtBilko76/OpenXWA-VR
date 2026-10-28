@@ -318,6 +318,8 @@ set(XWA_APP_SOURCES
     src/xwa_app/setup.c
     src/xwa_vr/xwa_vr.c
     src/xwa_vr/vr_keyboard.c
+    src/xwa_vr/vr_draw.c
+    src/xwa_vr/vr_command_menu.c
 )
 
 if(ANDROID)

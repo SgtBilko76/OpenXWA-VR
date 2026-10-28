@@ -940,6 +940,24 @@ int XwaHostConfig_Load(AeronVfs* vfs, XwaHostConfig* out, char* error, size_t er
 			slot14->index     = (uint8_t)AERON_GAMEPAD_BUTTON_MISC1;
 			slot14->threshold = XWA_CONTROLLER_DIGITAL_THRESHOLD_DEFAULT;
 		}
+		/* Quest layout change in 0.1.8: the left-grip shift layer became the
+		 * VR command menu, so the pad only carries the direct buttons (B =
+		 * fighters targeting you, X = weapons, Y = link fire, left trigger =
+		 * countermeasure, right stick click = match speed, left stick click =
+		 * nearest fighter) and slots 11-16 are unbound. Only configs still
+		 * holding the untouched 0.1.6/0.1.7 defaults change. */
+		static const uint16_t old_018[20] = { 156, 155, 116, 119, 101, 114, 32,  13,  120, 27,
+											  111, 104, 68,  44,  0,   0,   82,  204, 203, 80 };
+		static const uint16_t new_018[20] = { 156, 155, 116, 101, 119, 120, 99, 13, 114, 27,
+											  0,   0,   0,   0,   0,   0,   0,  0,  0,   0 };
+		if (memcmp(actions, old_018, sizeof old_018) == 0) {
+			memcpy(actions, new_018, sizeof new_018);
+			for (int slot = 10; slot < 16; ++slot) {
+				AeronControllerDigitalSource* button = &out->input_options.controller.gamepad.buttons[slot];
+				memset(button, 0, sizeof *button);
+				button->kind = AERON_CONTROLLER_DIGITAL_NONE;
+			}
+		}
 	}
 #endif
 	return valid;

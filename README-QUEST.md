@@ -1,7 +1,7 @@
 # OpenXWA VR for Meta Quest
 
 Standalone Meta Quest 3 port of OpenXWA (Star Wars: X-Wing Alliance) with
-OpenXR: menus on a virtual screen over passthrough, a head-tracked stereo
+OpenXR: menus on a virtual screen, a head-tracked stereo
 3D cockpit in flight, and Touch controller support. The X-Wing, Y-Wing,
 A-Wing, B-Wing, TIE Fighter/Interceptor, TIE Bomber and Millennium Falcon
 use the more detailed 3D cockpits from X-Wing Revival (included; their
@@ -49,21 +49,27 @@ remapped in Options > Game Controller Options):
 | Right stick left/right | Roll |
 | Right stick up/down | Throttle lever (stays where you leave it) |
 | Right trigger | Fire |
+| Left trigger | Countermeasure |
 | Right grip | Pick target in sight |
-| A / B | Next target / cycle weapons |
-| X | Fighters targeting you |
-| Y | Nearest fighter |
-| Left stick click | Cycle firing mode (link fire) |
-| Right stick click | Hyperspace |
-| Left trigger | Confirm (Space) |
+| A / B | Next target / fighters targeting you |
+| X / Y | Cycle weapons / cycle firing mode (link fire) |
+| Left stick click | Nearest fighter |
+| Right stick click | Match target speed |
 | Menu | Options screen |
-| Left grip + A / B | Laser / shield recharge rate |
-| Left grip + X | Pick up targeted cargo (Shift-P) |
-| Left grip + Y | Release carried cargo (Shift-R) |
-| Left grip + left trigger | Dock with / board targeted craft (Shift-D) |
-| Left grip + right grip | Target components |
-| Left grip + left stick click | Nearest objective |
-| Left grip + right stick click | Match target speed |
+| Left grip (hold) | Command menu |
+
+Command menu: hold the left grip and a panel with the remaining flight
+commands appears below the view; point at an entry with either controller
+and pull its trigger (the triggers don't fire while the panel is open).
+Releasing the grip closes it. The game keeps running meanwhile.
+
+| Energy | Targeting | Wingmen | Ship |
+|---|---|---|---|
+| Laser rate (F9) | Next objective (O) | Attack target (Shift-A) | Pick up cargo (Shift-P) |
+| Shield rate (F10) | Components (,) | Cover me (Shift-C) | Release cargo (Shift-R) |
+| Shield balance (S) | Its attacker (A) | Ignore target (Shift-I) | Dock / board (Shift-D) |
+| Shield > laser (Shift-F9) | Map (M) | Reinforce (Shift-S) | S-foils (V) |
+| Laser > shield (Shift-F10) | Hyperspace (H) | Call resupply (Shift-B) | Confirm (Space) |
 
 ## Build (Linux host)
 
