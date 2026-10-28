@@ -23,7 +23,8 @@ input:
     #   click = leftstick; menu button = start.
     #   Holding a grip opens that hand's VR radial menu (left: energy and
     #   ship, right: targeting and wingmen); a right grip tap pulses
-    #   rightshoulder. Left grip + left stick click = hyperspace.
+    #   rightshoulder. The left stick click alone is hyperspace; with the left
+    #   grip held it is rightstick.
     # Every binding below is remappable in Options > Controller.
     gamepad:
       axes:
@@ -60,7 +61,7 @@ input:
         - 120 # Y: cycle firing settings (link fire)
         - 99  # left trigger: fire countermeasure
         - 13  # right stick click: match targeted craft's speed
-        - 114 # left stick click: target nearest fighter
+        - 114 # left grip + left stick click: target nearest fighter
         - 27  # menu: options screen
         - 0
         - 0

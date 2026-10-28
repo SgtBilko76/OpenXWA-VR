@@ -53,12 +53,12 @@ remapped in Options > Game Controller Options):
 | Right grip (tap) | Pick target in sight |
 | A / B | Next target / fighters targeting you |
 | X / Y | Cycle weapons / cycle firing mode (link fire) |
-| Left stick click | Nearest fighter |
+| Left stick click | Hyperspace: first click asks, second click jumps (at a hyper buoy one click jumps) |
 | Right stick click | Match target speed |
 | Menu | Options screen |
 | Left grip (hold) | Radial menu: energy and ship |
 | Right grip (hold) | Radial menu: targeting and wingmen |
-| Left grip + left stick click | Hyperspace: first click asks, second click jumps (at a hyper buoy one click jumps) |
+| Left grip + left stick click | Nearest fighter |
 
 Radial menus: hold a grip and a star of eight commands appears above that
 controller. Tilt the same hand's stick towards a command and release the

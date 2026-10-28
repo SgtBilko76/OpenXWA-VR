@@ -94,6 +94,9 @@ typedef struct VrPanel {
 	int                    dirty;
 } VrPanel;
 
+/* The left stick click, decided when it goes down and kept until released. */
+enum { VR_LCLICK_NONE, VR_LCLICK_HYPERSPACE, VR_LCLICK_FIGHTER };
+
 typedef struct VrRadialState {
 	VrPanel  panel;
 	int      visible;
@@ -245,7 +248,7 @@ static struct {
 	int                   rgrip_held;      /* right grip down (flying) */
 	uint64_t              rgrip_down_ms;   /* when it went down */
 	uint64_t              rgrip_pulse_ms;  /* target-in-sight pulse lasts until */
-	int                   lclick_block;    /* left stick click used for hyperspace: held */
+	int                   lclick_mode;     /* what the held left stick click does (VR_LCLICK_*) */
 	XrVector3f            head_pos;        /* last known head position (LOCAL) */
 	/* Queued keyboard shortcuts from the command menu */
 	VrCommand             chord_queue[8];
@@ -1117,9 +1120,10 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	 * it opens the radial menu instead. */
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GetTicks() < g_vr.rgrip_pulse_ms);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, g_vr.stick_click[VR_RIGHT]);
-	/* With the left radial menu open the left stick click is hyperspace. */
+	/* Left grip + left stick click = right stick button (nearest fighter by
+	 * default); the click alone is hyperspace (vr_update_radials). */
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK,
-								 !g_vr.radial[VR_LEFT].visible && !g_vr.lclick_block && g_vr.stick_click[VR_LEFT]);
+								 g_vr.lclick_mode == VR_LCLICK_FIGHTER && g_vr.stick_click[VR_LEFT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_START, g_vr.button_menu);
 	/* Unused since the command menu replaced the left-grip shift layer. */
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, 0);
@@ -1384,18 +1388,23 @@ static void vr_update_radials(int flying) {
 		radial->visible = open;
 	}
 
-	/* Left grip + left stick click = hyperspace (prepare, then jump). The
-	 * click stays blocked for the pad until released, even if the grip is
-	 * let go first. */
-	if (!g_vr.stick_click[VR_LEFT]) {
-		g_vr.lclick_block = 0;
-	} else if (g_vr.radial[VR_LEFT].visible && !g_vr.lclick_block) {
-		g_vr.lclick_block               = 1;
-		g_vr.radial[VR_LEFT].selected   = VR_RADIAL_NONE; /* the click is not a menu choice */
-		g_vr.radial[VR_LEFT].suppressed = 1;
-		g_vr.radial[VR_LEFT].panel.dirty = 1;
-		vr_hyperspace();
-		vr_kb_haptic(VR_LEFT);
+	/* Left stick click alone = hyperspace (prepare, then jump); with the
+	 * left grip held = nearest fighter (the pad's right stick button). The
+	 * meaning is fixed when the click goes down, so letting go of the grip
+	 * mid-click changes nothing. */
+	if (!g_vr.stick_click[VR_LEFT] || !flying) {
+		g_vr.lclick_mode = VR_LCLICK_NONE;
+	} else if (g_vr.lclick_mode == VR_LCLICK_NONE) {
+		if (g_vr.radial[VR_LEFT].visible || vr_hysteresis(g_vr.grip_down[VR_LEFT], g_vr.grip[VR_LEFT])) {
+			g_vr.lclick_mode                 = VR_LCLICK_FIGHTER;
+			g_vr.radial[VR_LEFT].selected    = VR_RADIAL_NONE; /* the click is not a menu choice */
+			g_vr.radial[VR_LEFT].suppressed  = 1;
+			g_vr.radial[VR_LEFT].panel.dirty = 1;
+		} else {
+			g_vr.lclick_mode = VR_LCLICK_HYPERSPACE;
+			vr_hyperspace();
+			vr_kb_haptic(VR_LEFT);
+		}
 	}
 }
 
