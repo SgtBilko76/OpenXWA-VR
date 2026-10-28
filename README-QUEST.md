@@ -23,6 +23,8 @@ no game data.
 
 ## Controls
 
+![OpenXWA VR controller mapping](docs/controls.webp)
+
 Hold the Meta button on the right controller to re-centre the view.
 
 Menus (concourse, briefing, options, hangar, in-flight Escape menu):
