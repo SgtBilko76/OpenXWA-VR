@@ -32,6 +32,7 @@
 #include "xwa_runtime/runtime/flight_task.h"
 #include "xwa/flight/flight_display.h"
 #include "xwa/flight/hangar.h"
+#include "xwa/flight/player/player.h"
 
 #include <math.h>
 #include <string.h>
@@ -213,6 +214,7 @@ static struct {
 	int                   cmd_visible;
 	int                   cmd_drawn_flash;
 	int                   trigger_block[VR_HAND_COUNT]; /* trigger used on the menu: not fire until released */
+	int                   lclick_block;                 /* left stick click used for hyperspace: held */
 	/* Queued keyboard shortcuts from the command menu */
 	VrCommand             chord_queue[8];
 	int                   chord_head, chord_count;
@@ -317,6 +319,28 @@ static void vr_queue_chord(const VrCommand* command) {
 	}
 	g_vr.chord_queue[(g_vr.chord_head + g_vr.chord_count) % (int)SDL_arraysize(g_vr.chord_queue)] = *command;
 	++g_vr.chord_count;
+}
+
+/* Hyperspace in one combination (left grip + left stick click, or the menu
+ * entry). The game asks before jumping: H shows "Hit [Space] ...", Space
+ * confirms; near a hyper buoy the game already shows "Press [SPACE] to
+ * hyperspace to ..." on its own. So: if a hyperspace prompt is pending, type
+ * Space (jump); otherwise type H (prompt). H must not be typed while the buoy
+ * prompt is pending: it would replace the region jump with leaving the
+ * mission. Pending action ids: 10 = hyper buoy jump, 11 = leave mission. */
+static void vr_hyperspace(void) {
+	static const VrCommand prepare = { "Hyperspace", SDL_SCANCODE_H, 0 };
+	static const VrCommand confirm = { "Confirm", SDL_SCANCODE_SPACE, 0 };
+	const uint8_t          pending = g_localPlayer >= 0 && g_localPlayer < XWA_PLAYER_COUNT
+										 ? g_players[g_localPlayer].pendingActionId
+										 : 0;
+
+	if (g_vr.chord_count || g_vr.chord_phase != VR_CHORD_IDLE) {
+		return; /* still typing the previous step */
+	}
+	vr_queue_chord(pending == 10 || pending == 11 ? &confirm : &prepare);
+	Aeron_LogInfo(VR_LOG, "hyperspace: %s (pending action %u)", pending == 10 || pending == 11 ? "confirm" : "prepare",
+				  (unsigned)pending);
 }
 
 static SDL_Keymod vr_chord_mod(void) { return g_vr.chord_current.shift ? SDL_KMOD_LSHIFT : SDL_KMOD_NONE; }
@@ -1051,7 +1075,9 @@ static void vr_update_gamepad(int in_flight, float dt) {
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
 								 vr_hysteresis(g_vr.grip_down[VR_RIGHT], g_vr.grip[VR_RIGHT]));
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_STICK, g_vr.stick_click[VR_RIGHT]);
-	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK, g_vr.stick_click[VR_LEFT]);
+	/* With the command menu open the left stick click is hyperspace. */
+	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK,
+								 !g_vr.cmd_visible && !g_vr.lclick_block && g_vr.stick_click[VR_LEFT]);
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_START, g_vr.button_menu);
 	/* Unused since the command menu replaced the left-grip shift layer. */
 	SDL_SetJoystickVirtualButton(g_vr.pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, 0);
@@ -1232,6 +1258,17 @@ static void vr_update_command_menu(int flying) {
 	}
 	g_vr.cmd_visible = open;
 
+	/* Left grip + left stick click = hyperspace (prepare, then jump). The
+	 * click stays blocked for the pad until released, even if the grip is
+	 * let go first. */
+	if (!g_vr.stick_click[VR_LEFT]) {
+		g_vr.lclick_block = 0;
+	} else if (open && !g_vr.lclick_block) {
+		g_vr.lclick_block = 1;
+		vr_hyperspace();
+		vr_kb_haptic(VR_LEFT);
+	}
+
 	for (int hand = 0; hand < VR_HAND_COUNT; ++hand) {
 		const int was_down = g_vr.trigger_down[hand];
 		const int down     = vr_hysteresis(was_down, g_vr.trigger[hand]);
@@ -1257,7 +1294,11 @@ static void vr_update_command_menu(int flying) {
 		if (down && !was_down && item != VR_CMD_NO_ITEM) {
 			const VrCommand* command = VrCommandMenu_Item(item);
 			VrCommandMenu_Press(&g_vr.cmd, item, now_ms);
-			vr_queue_chord(command);
+			if (command->scancode == SDL_SCANCODE_H) {
+				vr_hyperspace();
+			} else {
+				vr_queue_chord(command);
+			}
 			vr_kb_haptic((VrHand)hand);
 			g_vr.kb_dirty = 1;
 			Aeron_LogInfo(VR_LOG, "command menu: %s", command->label);

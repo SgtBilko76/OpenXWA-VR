@@ -57,6 +57,7 @@ remapped in Options > Game Controller Options):
 | Right stick click | Match target speed |
 | Menu | Options screen |
 | Left grip (hold) | Command menu |
+| Left grip + left stick click | Hyperspace: first click asks, second click jumps (at a hyper buoy one click jumps) |
 
 Command menu: hold the left grip and a panel with the remaining flight
 commands appears below the view; point at an entry with either controller
