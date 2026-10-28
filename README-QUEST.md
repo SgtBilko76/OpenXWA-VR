@@ -1,5 +1,7 @@
 # OpenXWA VR for Meta Quest
 
+**Download, install guide, controls and pictures: [portroyale.online/openxwa.html](https://portroyale.online/openxwa.html)**
+
 Standalone Meta Quest 3 port of OpenXWA (Star Wars: X-Wing Alliance) with
 OpenXR: menus on a virtual screen, a head-tracked stereo
 3D cockpit in flight, and Touch controller support. The X-Wing, Y-Wing,
