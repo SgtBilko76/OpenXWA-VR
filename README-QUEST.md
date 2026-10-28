@@ -84,7 +84,8 @@ Requirements: Android SDK + NDK 27.2.12479018, JDK 17, SDL_shadercross
 
 VR code lives in `src/xwa_vr/` (OpenXR session, input, layers),
 `src/xwa_remaster/vr_stereo.h` + `flight.c` (per-eye rendering) and the
-`quest-vr` branch of the Aeron engine fork (`external_present.*`).
+Aeron engine commit pinned by the `aeron` submodule (`external_present.*`),
+fetched from elyosh/Aeron by its hash.
 
 X-Wing Revival cockpits are converted at build time from Revival's free
 game data by `tools/quest/gen_revival_cockpits.py` (set `XW_REVIVAL_DATA`
