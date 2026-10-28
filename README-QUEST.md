@@ -50,27 +50,31 @@ remapped in Options > Game Controller Options):
 | Right stick up/down | Throttle lever (stays where you leave it) |
 | Right trigger | Fire |
 | Left trigger | Countermeasure |
-| Right grip | Pick target in sight |
+| Right grip (tap) | Pick target in sight |
 | A / B | Next target / fighters targeting you |
 | X / Y | Cycle weapons / cycle firing mode (link fire) |
 | Left stick click | Nearest fighter |
 | Right stick click | Match target speed |
 | Menu | Options screen |
-| Left grip (hold) | Command menu |
+| Left grip (hold) | Radial menu: energy and ship |
+| Right grip (hold) | Radial menu: targeting and wingmen |
 | Left grip + left stick click | Hyperspace: first click asks, second click jumps (at a hyper buoy one click jumps) |
 
-Command menu: hold the left grip and a panel with the remaining flight
-commands appears below the view; point at an entry with either controller
-and pull its trigger (the triggers don't fire while the panel is open).
-Releasing the grip closes it. The game keeps running meanwhile.
+Radial menus: hold a grip and a star of eight commands appears above that
+controller. Tilt the same hand's stick towards a command and release the
+grip to run it; release with the stick centred to cancel. The stick doesn't
+fly while it is choosing, everything else (fire, other stick) keeps working.
 
-| Energy | Targeting | Wingmen | Ship |
-|---|---|---|---|
-| Laser rate (F9) | Next objective (O) | Attack target (Shift-A) | Pick up cargo (Shift-P) |
-| Shield rate (F10) | Components (,) | Cover me (Shift-C) | Release cargo (Shift-R) |
-| Shield balance (S) | Its attacker (A) | Ignore target (Shift-I) | Dock / board (Shift-D) |
-| Shield > laser (Shift-F9) | Map (M) | Reinforce (Shift-S) | S-foils (V) |
-| Laser > shield (Shift-F10) | Hyperspace (H) | Call resupply (Shift-B) | Confirm (Space) |
+| Direction | Left (energy and ship) | Right (targeting and wingmen) |
+|---|---|---|
+| Up | Laser rate (F9) | Next objective (O) |
+| Up-right | Shield rate (F10) | Components (,) |
+| Right | Laser > shield (Shift-F10) | Map (M) |
+| Down-right | Dock / board (Shift-D) | Attack target (Shift-A) |
+| Down | Release cargo (Shift-R) | Cover me (Shift-C) |
+| Down-left | Pick up cargo (Shift-P) | Ignore target (Shift-I) |
+| Left | Shield > laser (Shift-F9) | Reinforce (Shift-S) |
+| Up-left | Shield balance (S) | Its attacker (A) |
 
 ## Build (Linux host)
 

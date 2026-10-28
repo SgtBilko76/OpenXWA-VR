@@ -21,8 +21,9 @@ input:
     #   triggers = trigger axes; A/B/X/Y = south/east/west/north;
     #   right grip = rightshoulder; left stick click = rightstick, right stick
     #   click = leftstick; menu button = start.
-    #   The left grip opens the VR command menu (energy, targeting, wingmen,
-    #   cargo, docking, hyperspace...) and is not part of the gamepad.
+    #   Holding a grip opens that hand's VR radial menu (left: energy and
+    #   ship, right: targeting and wingmen); a right grip tap pulses
+    #   rightshoulder. Left grip + left stick click = hyperspace.
     # Every binding below is remappable in Options > Controller.
     gamepad:
       axes:
@@ -52,7 +53,7 @@ input:
       # Codes are the action codes from the game's JOYSTICK.TXT.
       actions:
         - 156 # right trigger: fire weapon
-        - 155 # right grip: pick target in sight
+        - 155 # right grip tap: pick target in sight
         - 116 # A: next target
         - 101 # B: cycle fighters targeting you
         - 119 # X: cycle weapon settings
